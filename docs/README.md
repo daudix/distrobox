@@ -28,4 +28,4 @@ Distrobox uses `podman`, `docker` or [`lilipod`](https://github.com/89luca89/lil
 
 ## Documentation
 
-Documentation for the [latest release](https://github.com/89luca89/distrobox/releases) is available over at [distrobox.it](https://distrobox.it). Documentation on GitHub strictly refers to the code in the main branch and is not optimized for being viewed without building it as the website.
+Documentation for the [latest release](https://github.com/89luca89/distrobox/releases/latest) is available over at [distrobox.it](https://distrobox.it). Documentation on GitHub strictly refers to the code in the main branch and is not optimized for being viewed without building it as the website.
