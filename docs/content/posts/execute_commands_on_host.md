@@ -34,7 +34,7 @@ Built:        Thu Jan  1 01:00:00 1970
 OS/Arch:      linux/amd64
 ```
 
-## Using symlinks
+## Using Symlinks
 
 Another way to execute commands on the host, is to create executables symlinking `distrobox-host-exec`:
 
@@ -58,12 +58,12 @@ Built:        Thu Jan  1 01:00:00 1970
 OS/Arch:      linux/amd64
 ```
 
-# Integrate host with container seamlessly
+## Integrate Host with Container Seamlessly
 
 Another cool trick we can pull, is to use the handy `command_not_found_handle` function
 to try and execute missing commands in the container on the host.
 
-## bash or zsh
+### bash or zsh
 
 Place this in your `~/.profile`:
 
@@ -85,7 +85,7 @@ fi
 
 And then, run `source ~/.profile` to reload `.profile` in the current session.
 
-## fish
+### fish
 
 Place this snippet in a new fish function file (`~/.config/fish/functions/fish_command_not_found.fish`):
 

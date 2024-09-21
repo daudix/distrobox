@@ -27,8 +27,8 @@ Use any Linux distribution inside your terminal. Enable both backward and forwar
 compatibility with software and freedom to use whatever distribution you’re more
 comfortable with.
 Distrobox uses `podman`, `docker` or
-[`lilipod`](https://github.com/89luca89/lilipod) to create containers using the Linux distribution
-of your choice.
+[`lilipod`](https://github.com/89luca89/lilipod) to create containers using the
+Linux distribution of your choice.
 The created container will be tightly integrated with the host, allowing sharing
 of the HOME directory of the user, external storage, external USB devices and
 graphical apps (X11/Wayland), and audio.
@@ -154,7 +154,8 @@ The container will have complete access to your home, pen drive, and so on,
 so do not expect it to be highly sandboxed like a plain
 `docker`/`podman` container or a Flatpak.
 
-⚠️ **BE CAREFUL**:⚠️  if you use `docker`, or you use `podman`/`lilipod` with the `--root/-r` flag,
+{% alert(caution=true) %}
+If you use `docker`, or you use `podman`/`lilipod` with the `--root/-r` flag,
 the containers will run as root, so **root inside the rootful container can modify
 system stuff outside the container**,
 Be also aware that **In rootful mode, you'll be asked to setup the user's password**, this will
@@ -162,6 +163,7 @@ ensure at least that the container is not a passwordless gate to root,
 but if you have security concerns for this, **use `podman` or `lilipod` that runs in rootless mode**.
 Rootless `docker` is still not working as intended and will be included in the future
 when it will be complete.
+{% end %}
 
 That said, it is in the works to implement some sort of decoupling with the host,
 as discussed here: [#28 Sandboxed mode](https://github.com/89luca89/distrobox/issues/28)
@@ -181,7 +183,6 @@ distrobox create --name test --init --image debian:latest --additional-packages 
 ```
 
 Enter created distrobox:
-
 
 ```bash
 distrobox enter test
@@ -407,7 +408,13 @@ you can specify another directory if needed with `./uninstall --prefix ~/.local`
 
 This artwork uses:
 
-- [Cardboard Box](https://sketchfab.com/3d-models/a-cardboard-box-d527ec1f29a14513a6e8712a1e980f91) model by [J0Y](https://sketchfab.com/lloydrostek), licensed under [Creative Commons Attribution 4.0](http://creativecommons.org/licenses/by/4.0).  
-- [GTK Loop Animation](https://github.com/gnome-design-team/gnome-mockups/blob/1ce3f25304e31540a7fc65aa775e854c15404a20/gtk/loop6.blend) by the [GNOME Project](https://www.gnome.org), licensed under [Creative Commons Attribution-ShareAlike 3.0](https://creativecommons.org/licenses/by-sa/3.0) as a pre-configured scene.
-- [Distribution Icons](https://www.reddit.com/r/linux/comments/nt1tm9/i_made_a_uniform_icon_set_of_linux_distribution) by [u/walrusz](https://www.reddit.com/user/walrusz/).
+- [Cardboard Box](https://sketchfab.com/3d-models/a-cardboard-box-d527ec1f29a14513a6e8712a1e980f91)
+model by [J0Y](https://sketchfab.com/lloydrostek),
+licensed under [Creative Commons Attribution 4.0](http://creativecommons.org/licenses/by/4.0).  
+- [GTK Loop Animation](https://github.com/gnome-design-team/gnome-mockups/blob/1ce3f25304e31540a7fc65aa775e854c15404a20/gtk/loop6.blend)
+by the [GNOME Project](https://www.gnome.org),
+licensed under [Creative Commons Attribution-ShareAlike 3.0](https://creativecommons.org/licenses/by-sa/3.0)
+as a pre-configured scene.
+- [Distribution Icons](https://www.reddit.com/r/linux/comments/nt1tm9/i_made_a_uniform_icon_set_of_linux_distribution)
+by [u/walrusz](https://www.reddit.com/user/walrusz/).
 </small>

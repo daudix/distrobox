@@ -31,7 +31,7 @@ For more detailed installation instructions, refer to the documentation
 
 To upgrade the version of `distrobox`, follow the instructions provided in the documentation link above.
 
-### Option 2: Overwrite the provided `distrobox` installation in SteamOS
+### Option 2: Overwrite the Provided `distrobox` Installation in SteamOS
 
 An alternative approach is to upgrade the version of `distrobox` provided by SteamOS. While this simplifies management
 as you don't need to modify your PATH and you wouldn't have 2 versions of `distrobox` installed, it comes with the
@@ -69,7 +69,7 @@ distrobox create && distrobox enter
 Refer to the [quickstart guide](@/_index.md#quick-start) and to the [usage docs](@/usage/_index.md)
 And don't forget the [useful tips](@/useful_tips.md)!
 
-## SteamOS 3.4 and earlier
+## SteamOS 3.4 and Earlier
 
 To install Distrobox on the steamdeck, we can install both `podman` and `distrobox`
 inside the `$HOME` so that containers will survive updates.
@@ -132,7 +132,7 @@ is not working correctly inside the container, and it's a SteamOS specific issue
 `PATH` is needed to ensure distrobox can find the `podman` binary we previously
 downloaded.
 
-## Start using it
+## Start Using It
 
 You can now start using `distrobox` on the deck, open the terminal and go:
 

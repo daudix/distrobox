@@ -1,12 +1,14 @@
 +++
-title = "Using a stable-release distribution"
+title = "Using a Stable-Release Distribution"
 [extra]
 toc = true
 +++
 
-⚠️ **BE CAREFUL**:⚠️  THIS IS EXPERIMENTAL, JUST FOOD FOR THOUGHTS
+{% alert(warning=true) %}
+THIS IS EXPERIMENTAL, JUST FOOD FOR THOUGHTS.
 
-⚠️ **BE CAREFUL**:⚠️  BUG REPORTS FOR THIS TYPE OF EXPERIMENTS WILL BE TREATED WITH VERY LOW PRIORITY
+BUG REPORTS FOR THIS TYPE OF EXPERIMENTS WILL BE TREATED WITH VERY LOW PRIORITY.
+{% end %}
 
 Lots of people prefer to run a distribution following a stable-LTS release cycle
 like Debian, UbuntuLTS or CentOS family (Almalinux, Rocky Linux).
@@ -15,7 +17,7 @@ This ensures great stability on one hand, but package staling on the other.
 One way to counter this effect is to use a pet-container managed by Distrobox
 to run packages from much newer distributions without giving up on core base os stability.
 
-## Initializing the distrobox
+## Initializing the Distrobox
 
 For this experiment we'll use Fedora Rawhide as our distrobox, and Centos 8 Stream
 as our host, so:
@@ -43,7 +45,7 @@ And let's grab a coffee while it finishes :-)
 After the `dnf` process finishes, we have GNOME installed in our container,
 now how do we use it?
 
-### Generate session file - GNOME
+### Generate Session File - GNOME
 
 First in the host we need a reliable way to fix the permissions problem of the
 `/tmp/.X11-unix` directory. This directory should either belong to `root` or
@@ -94,7 +96,7 @@ We first need to install Plasma in the container:
 user@fedora-rawhide:~$ sudo dnf groupinstall KDE
 ```
 
-### Generate session file - Plasma
+### Generate Session File - Plasma
 
 We need to add a desktop file for the session on the **host's** file system,
 so that it appears on your login manager (Be it SSDM or GDM)
@@ -110,7 +112,7 @@ X-KDE-PluginInfo-Version=5.23.3
 This file should be placed under `/usr/local/share/wayland-sessions/distrobox-plasma.desktop`
 (If it doesn't show up, you can place it under `/usr/share/xsessions/distrobox-plasma.desktop`)
 
-### Add a couple of fixes
+### Add a Couple of Fixes
 
 To make Plasma work we need a couple more fixes to run both on the host and in the container.
 
@@ -147,7 +149,7 @@ Let's log out and voilá!
 We now are in latest KDE Plasma session inside Fedora Rawhide while our main OS remains
 Centos.
 
-# Using other GUIs
+## Using Other GUIs
 
 Thanks to [J.S. Evans](https://twitter.com/usenetnerd) he experimented and wrote a beautiful blog post
 on how to use Distrobox for much more than simply running apps.
@@ -156,7 +158,7 @@ You'll read on how to set up a working Ubuntu container with IceWM running on Xo
 
 [Read the Article HERE](https://cloudyday.tech.blog/2022/05/14/distrobox-is-awesome/)
 
-# Using apps from host
+## Using Apps from Host
 
 Now that we're in a container session, we may want to still use some of the host's
 apps. Refer to [THIS](@/posts/execute_commands_on_host.md) to create handlers and wrappers

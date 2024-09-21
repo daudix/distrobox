@@ -9,7 +9,7 @@ installing lots and lots of packages on the base system is not advisable.
 
 One way is to use a distrobox for them.
 
-## Prepare the container
+## Prepare the Container
 
 To run libvirt/qemu/kvm we need a systemd container and we need a **rootful** container
 to be able to use it, see [this tip](@/useful_tips.md#using-init-system-inside-a-distrobox)
@@ -49,7 +49,7 @@ distrobox create --pull --root --init --unshare-all --image registry.opensuse.or
 distrobox-enter --root libvirtd -- distrobox-export --app virt-manager
 ```
 
-## Launch from the container
+## Launch from the Container
 
 Simply select the `Virt Manager (on libvirt)` entry in your menu, entry your root password and you're done!
 

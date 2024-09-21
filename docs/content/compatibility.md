@@ -16,7 +16,7 @@ Maintaining your own custom image is also an option.
 The main concern is having basic Linux utilities (`mount`), basic user management
 utilities (`usermod, passwd`), and `sudo` correctly set.
 
-## Supported container managers
+## Supported Container Managers
 
 `distrobox` can run on either `podman`, `docker` or [`lilipod`](https://github.com/89luca89/lilipod)
 
@@ -63,9 +63,9 @@ Distrobox has been successfully tested on:
 | Void Linux | glibc <br> musl | |
 | Windows | Oracle Linux 9 | using built-in Windows Subsystem for Linux |
 
-### Compatibility notes
+### Compatibility Notes
 
-### Non shared mounts
+### Non Shared Mounts
 
 Note also that in some distributions, root filesystem is **not** mounted as a shared mount,
 this will give an error like:
@@ -84,11 +84,11 @@ mount --make-rshared /
 
 To make it permanent, you can place it in `/etc/rc.local`.
 
-## List of distributions including distrobox in their repositories
+## List of Distributions Including Distrobox in Their Repositories
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/distrobox.svg#no-hover)](https://repology.org/project/distrobox/versions)
 
-### New Host Distro support
+### New Host Distro Support
 
 If your distro of choice is not on the list, open an issue requesting support
 for it, we can work together to check if it is possible to add support for it.
@@ -164,7 +164,7 @@ bring support to it. If you are looking for unprivileged NixOS environments,
 we suggest you look into [nix-shell](https://nixos.org/manual/nix/unstable/command-ref/nix-shell.html)
 or [nix portable](https://github.com/DavHau/nix-portable)
 
-### New Distro support
+### New Distro Support
 
 If your distro of choice is not on the list, open an issue requesting support
 for it, we can work together to check if it is possible to add support for it.
@@ -172,7 +172,7 @@ for it, we can work together to check if it is possible to add support for it.
 Or just try using it anyway, if it works, open an issue
 and it will be added to the list!
 
-### Older distributions
+### Older Distributions
 
 For older distributions like CentOS 5, CentOS 6, Debian 6, Ubuntu 12.04,
 compatibility is not assured.
@@ -184,7 +184,7 @@ host.
 Keep also in mind that mirrors could be down for such old releases, so you will
 need to build a [custom distrobox image to ensure basic dependencies are met](@/posts/distrobox_custom.md).
 
-### GPU Acceleration support
+### GPU Acceleration Support
 
 For Intel and AMD Gpus, the support is baked in, as the containers will install
 their latest available mesa/dri drivers.

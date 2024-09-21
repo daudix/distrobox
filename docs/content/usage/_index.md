@@ -2,8 +2,7 @@
 title = "Usage"
 +++
 
-<!-- markdownlint-disable MD010 MD051 -->
-## Outside the distrobox
+## Outside the Distrobox
 
 - [distrobox-assemble](@/usage/distrobox-assemble.md)
 - [distrobox-create](@/usage/distrobox-create.md)
@@ -15,7 +14,7 @@ title = "Usage"
 - [distrobox-upgrade](@/usage/distrobox-upgrade.md)
 - [distrobox-generate-entry](@/usage/distrobox-generate-entry.md)
 
-## Inside the distrobox
+## Inside the Distrobox
 
 - [distrobox-export](@/usage/distrobox-export.md)
 - [distrobox-host-exec](@/usage/distrobox-host-exec.md)
