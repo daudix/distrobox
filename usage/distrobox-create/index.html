@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>distrobox-create - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/usage/distrobox-create/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="distrobox-create - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/usage/distrobox-create/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>distrobox-create</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#name">NAME</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#description">DESCRIPTION</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#synopsis">SYNOPSIS</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#compatibility">COMPATIBILITY</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#examples">EXAMPLES</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#environment-variables">ENVIRONMENT VARIABLES</a></li><li>
+				<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#extra">EXTRA</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/usage/distrobox-create/#nvidia-integration">NVidia integration</a>
+							</li></ul></li></ul><!-- markdownlint-disable MD010 MD036 -->
+<h2 id="name">NAME</h2>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create
+</span><span class="z-text z-plain">distrobox-create
+</span></code></pre>
+<h2 id="description">DESCRIPTION</h2>
+<p>distrobox-create takes care of creating the container with input name and image.
+The created container will be tightly integrated with the host, allowing sharing of
+the HOME directory of the user, external storage, external usb devices and
+graphical apps (X11/Wayland), and audio.</p>
+<h2 id="synopsis">SYNOPSIS</h2>
+<p><strong>distrobox create</strong></p>
+<pre class="z-code"><code><span class="z-text z-plain">--image/-i:		image to use for the container	default: ${container_image_default}
+</span><span class="z-text z-plain">--name/-n:		name for the distrobox          default: ${container_name_default}
+</span><span class="z-text z-plain">--hostname:		hostname for the distrobox      default: &lt;container-name&gt;.$(uname -n)
+</span><span class="z-text z-plain">--pull/-p:		pull the image even if it exists locally (implies --yes)
+</span><span class="z-text z-plain">--yes/-Y:		non-interactive, pull images without asking
+</span><span class="z-text z-plain">--root/-r:		launch podman/docker/lilipod with root privileges. Note that if you need root this is the preferred
+</span><span class="z-text z-plain">			way over &quot;sudo distrobox&quot; (note: if using a program other than &#39;sudo&#39; for root privileges is necessary,
+</span><span class="z-text z-plain">			specify it through the DBX_SUDO_PROGRAM env variable, or &#39;distrobox_sudo_program&#39; config variable)
+</span><span class="z-text z-plain">--clone/-c:		name of the distrobox container to use as base for a new container
+</span><span class="z-text z-plain">			this will be useful to either rename an existing distrobox or have multiple copies
+</span><span class="z-text z-plain">			of the same environment.
+</span><span class="z-text z-plain">--home/-H:		select a custom HOME directory for the container. Useful to avoid host&#39;s home littering with temp files.
+</span><span class="z-text z-plain">--volume:		additional volumes to add to the container
+</span><span class="z-text z-plain">--additional-flags/-a:	additional flags to pass to the container manager command
+</span><span class="z-text z-plain">--additional-packages/-ap:	additional packages to install during initial container setup
+</span><span class="z-text z-plain">--init-hooks:		additional commands to execute at the end of container initialization
+</span><span class="z-text z-plain">--pre-init-hooks:	additional commands to execute at the start of container initialization
+</span><span class="z-text z-plain">--init/-I:		use init system (like systemd) inside the container.
+</span><span class="z-text z-plain">			this will make host&#39;s processes not visible from within the container. (assumes --unshare-process)
+</span><span class="z-text z-plain">			may require additional packages depending on the container image: https://github.com/89luca89/distrobox/blob/main/docs/content/useful_tips.md#using-init-system-inside-a-distrobox
+</span><span class="z-text z-plain">--nvidia:		try to integrate host&#39;s nVidia drivers in the guest
+</span><span class="z-text z-plain">--unshare-devsys:          do not share host devices and sysfs dirs from host
+</span><span class="z-text z-plain">--unshare-groups:          do not forward user&#39;s additional groups into the container
+</span><span class="z-text z-plain">--unshare-ipc:          do not share ipc namespace with host
+</span><span class="z-text z-plain">--unshare-netns:        do not share the net namespace with host
+</span><span class="z-text z-plain">--unshare-process:          do not share process namespace with host
+</span><span class="z-text z-plain">--unshare-all:          activate all the unshare flags below
+</span><span class="z-text z-plain">--compatibility/-C:	show list of compatible images
+</span><span class="z-text z-plain">--help/-h:		show this message
+</span><span class="z-text z-plain">--no-entry:		do not generate a container entry in the application list
+</span><span class="z-text z-plain">--dry-run/-d:		only print the container manager command generated
+</span><span class="z-text z-plain">--verbose/-v:		show more verbosity
+</span><span class="z-text z-plain">--version/-V:		show version
+</span><span class="z-text z-plain">
+</span><span class="z-text z-plain">--absolutely-disable-root-password-i-am-really-positively-sure: ⚠️ ⚠️  when setting up a rootful distrobox, this will skip user password setup, leaving it blank. ⚠️ ⚠️
+</span></code></pre>
+<h2 id="compatibility">COMPATIBILITY</h2>
+<pre class="z-code"><code><span class="z-text z-plain">for a list of compatible images and container managers, please consult the man page:
+</span><span class="z-text z-plain">	man distrobox
+</span><span class="z-text z-plain">	man distrobox-compatibility
+</span><span class="z-text z-plain">or consult the documentation page on: https://github.com/89luca89/distrobox/blob/main/docs/content/compatibility.md#containers-distros
+</span></code></pre>
+<h2 id="examples">EXAMPLES</h2>
+<p>Create a distrobox with image alpine, called my-alpine container</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image alpine my-alpine-container
+</span></code></pre>
+<p>Create a distrobox from fedora-toolbox:35 image</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image registry.fedoraproject.org/fedora-toolbox:35 --name fedora-toolbox-35
+</span></code></pre>
+<p>Clone an existing distrobox container</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --clone fedora-35 --name fedora-35-copy
+</span></code></pre>
+<p>Always pull for the new image when creating a distrobox</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --pull --image centos:stream9 --home ~/distrobox/centos9
+</span></code></pre>
+<p>Add additional environment variables to the container</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image fedora:35 --name test --additional-flags &quot;--env MY_VAR=value&quot;
+</span></code></pre>
+<p>Add additional volumes to the container</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image fedora:35 --name test --volume /opt/my-dir:/usr/local/my-dir:rw --additional-flags &quot;--pids-limit -1&quot;
+</span></code></pre>
+<p>Add additional packages to the container</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image alpine:latest --name test2 --additional-packages &quot;git tmux vim&quot;
+</span></code></pre>
+<p>Use init-hooks to perform an action during container startup</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image alpine:latest --name test --init-hooks &quot;touch /var/tmp/test1 &amp;&amp; touch /var/tmp/test2&quot;
+</span></code></pre>
+<p>Use pre-init-hooks to perform an action at the beginning of the container startup (before any package manager starts)</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i docker.io/almalinux/8-init --init --name test --pre-init-hooks &quot;dnf config-manager --enable powertools &amp;&amp; dnf -y install epel-release&quot;
+</span></code></pre>
+<p>Use init to create a Systemd container (acts similar to an LXC):</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i ubuntu:latest --name test --additional-packages &quot;systemd libpam-systemd pipewire-audio-client-libraries&quot; --init
+</span></code></pre>
+<p>Use init to create a OpenRC container (acts similar to an LXC):</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i alpine:latest --name test --additional-packages &quot;openrc&quot; --init
+</span></code></pre>
+<p>Use host’s NVidia drivers integration</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image ubuntu:22.04 --name ubuntu-nvidia --nvidia
+</span></code></pre>
+<p>Do not use host’s IP inside the container:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image ubuntu:latest --name test --unshare-netns
+</span></code></pre>
+<p>Create a more isolated container, where only the $HOME, basic sockets and host’s FS (in /run/host) is shared:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --name unshared-test --unshare-all
+</span></code></pre>
+<p>Create a more isolated container, with it’s own init system, this will act very similar to a full LXC container:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --name unshared-init-test --unshare-all --init --image fedora:latest
+</span></code></pre>
+<p>Use environment variables to specify container name, image and container manager:</p>
+<pre class="z-code"><code><span class="z-text z-plain">DBX_CONTAINER_MANAGER=&quot;docker&quot; DBX_NON_INTERACTIVE=1 DBX_CONTAINER_NAME=test-alpine DBX_CONTAINER_IMAGE=alpine distrobox-create
+</span></code></pre>
+<h2 id="environment-variables">ENVIRONMENT VARIABLES</h2>
+<pre class="z-code"><code><span class="z-text z-plain">DBX_CONTAINER_ALWAYS_PULL
+</span><span class="z-text z-plain">DBX_CONTAINER_CUSTOM_HOME
+</span><span class="z-text z-plain">DBX_CONTAINER_HOME_PREFIX
+</span><span class="z-text z-plain">DBX_CONTAINER_IMAGE
+</span><span class="z-text z-plain">DBX_CONTAINER_MANAGER
+</span><span class="z-text z-plain">DBX_CONTAINER_NAME
+</span><span class="z-text z-plain">DBX_CONTAINER_HOSTNAME
+</span><span class="z-text z-plain">DBX_NON_INTERACTIVE
+</span><span class="z-text z-plain">DBX_SUDO_PROGRAM
+</span></code></pre>
+<p>DBX_CONTAINER_HOME_PREFIX defines where containers’ home directories will be located.
+If you define it as ~/dbx then all future containers’ home directories will be ~/dbx/$container_name</p>
+<h2 id="extra">EXTRA</h2>
+<p>The <code>--additional-flags</code> or <code>-a</code> is useful to modify defaults in the container creations.
+For example:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i docker.io/library/archlinux -n dev-arch
+</span><span class="z-text z-plain">
+</span><span class="z-text z-plain">podman container inspect dev-arch | jq &#39;.[0].HostConfig.PidsLimit&#39;
+</span><span class="z-text z-plain">2048
+</span><span class="z-text z-plain">
+</span><span class="z-text z-plain">distrobox rm -f dev-arch
+</span><span class="z-text z-plain">distrobox create -i docker.io/library/archlinux -n dev-arch --volume $CBL_TC:/tc --additional-flags &quot;--pids-limit -1&quot;
+</span><span class="z-text z-plain">
+</span><span class="z-text z-plain">podman container inspect dev-arch | jq &#39;.[0].HostConfig,.PidsLimit&#39;
+</span><span class="z-text z-plain">0
+</span></code></pre>
+<p>Additional volumes can be specified using the <code>--volume</code> flag. This flag follows the
+same standard as <code>docker</code> and <code>podman</code> to specify the mount point so <code>--volume SOURCE_PATH:DEST_PATH:MODE</code>.</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image docker.io/library/archlinux --name dev-arch --volume /usr/share/:/var/test:ro
+</span></code></pre>
+<p>During container creation, it is possible to specify (using the additional-flags) some
+environment variables that will persist in the container and be independent from your environment:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create --image fedora:35 --name test --additional-flags &quot;--env MY_VAR=value&quot;
+</span></code></pre>
+<p>The <code>--init-hooks</code> is useful to add commands to the entrypoint (init) of the container.
+This could be useful to create containers with a set of programs already installed, add users, groups.</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create  --image fedora:35 --name test --init-hooks &quot;dnf groupinstall -y \&quot;C Development Tools and Libraries\&quot;&quot;
+</span></code></pre>
+<p>The <code>--init</code> is useful to create a container that will use its own separate init system within.
+For example using:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i docker.io/almalinux/8-init --init --name test
+</span><span class="z-text z-plain">distrobox create -i docker.io/library/debian --additional-packages &quot;systemd&quot; --init --name test-debian
+</span></code></pre>
+<p>Inside the container we will be able to use normal systemd units:</p>
+<pre class="z-code"><code><span class="z-text z-plain">~$ distrobox enter test
+</span><span class="z-text z-plain">user@test:~$ sudo systemctl enable --now sshd
+</span><span class="z-text z-plain">user@test:~$ sudo systemctl status sshd
+</span><span class="z-text z-plain">	● sshd.service - OpenSSH server daemon
+</span><span class="z-text z-plain">	   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)
+</span><span class="z-text z-plain">	   Active: active (running) since Fri 2022-01-28 22:54:50 CET; 17s ago
+</span><span class="z-text z-plain">		 Docs: man:sshd(8)
+</span><span class="z-text z-plain">			   man:sshd_config(5)
+</span><span class="z-text z-plain">	 Main PID: 291 (sshd)
+</span></code></pre>
+<p>Note that enabling <code>--init</code> <strong>will disable host’s process integration</strong>.
+From within the container you will not be able to see and manage host’s processes.
+This is needed because <code>/sbin/init</code> must be pid 1.</p>
+<p>If you want to use a non-pre-create image, you’ll need to add the additional package:</p>
+<pre class="z-code"><code><span class="z-text z-plain">distrobox create -i alpine:latest --init --additional-packages &quot;openrc&quot; -n test
+</span><span class="z-text z-plain">distrobox create -i debian:stable --init --additional-packages &quot;systemd libpam-systemd pipewire-audio-client-libraries&quot; -n test
+</span><span class="z-text z-plain">distrobox create -i ubuntu:22.04 --init --additional-packages &quot;systemd libpam-systemd pipewire-audio-client-libraries&quot; -n test
+</span><span class="z-text z-plain">distrobox create -i archlinux:latest --init --additional-packages &quot;systemd&quot; -n test
+</span><span class="z-text z-plain">distrobox create -i registry.opensuse.org/opensuse/tumbleweed:latest --init --additional-packages &quot;systemd&quot; -n test
+</span><span class="z-text z-plain">distrobox create -i registry.fedoraproject.org/fedora:39 --init --additional-packages &quot;systemd&quot; -n test
+</span></code></pre>
+<p>The <code>--init</code> flag is useful to create system containers, where the container acts
+more similar to a full VM than an application-container.
+Inside you’ll have a separate init, user-session, daemons and so on.</p>
+<p>The <code>--home</code> flag let’s you specify a custom HOME for the container.
+Note that this will NOT prevent the mount of the host’s home directory,
+but will ensure that configs and dotfiles will not litter it.</p>
+<p>The <code>--root</code> flag will let you create a container with real root privileges. At
+first <code>enter</code> the user will be required to setup a password. This is done in order
+to not enable passwordless sudo/su, in a <strong>rootful</strong> container, this is needed
+because <strong>in this mode, root inside the container is also root outside the container!</strong></p>
+<p>The <code>--absolutely-disable-root-password-i-am-really-positively-sure</code>  will skip user password setup,
+leaving it blank.
+<strong>This is genuinely dangerous and you really, positively should NOT enable this</strong>.</p>
+<p>From version 1.4.0 of distrobox, when you create a new container, it will also generate
+an entry in the applications list.</p>
+<h3 id="nvidia-integration">NVidia integration</h3>
+<p>If your host has an NVidia gpu, with installed proprietary drivers, you can integrate
+them with the guests by using the <code>--nvidia</code> flag:</p>
+<p><code>distrobox create --nvidia --image ubuntu:latest --name ubuntu-nvidia</code></p>
+<p>Be aware that <strong>this is not compatible with non-glibc systems</strong> and <strong>needs somewhat newer
+distributions to work</strong>.</p>
+<p>This feature was tested working on:</p>
+<ul>
+<li>Almalinux</li>
+<li>Archlinux</li>
+<li>Centos 7 and newer</li>
+<li>Clearlinux</li>
+<li>Debian 10 and newer</li>
+<li>OpenSUSE Leap</li>
+<li>OpenSUSE Tumbleweed</li>
+<li>Rockylinux</li>
+<li>Ubuntu 18.04 and newer</li>
+<li>Void Linux (glibc)</li>
+</ul>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

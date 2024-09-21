@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Compatibility - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/compatibility/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Compatibility - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/compatibility/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/"class="active">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>Compatibility</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/compatibility/#supported-container-managers">Supported Container Managers</a></li><li>
+				<a href="https://daudix.github.io/distrobox/compatibility/#host-distros">Host Distros</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#compatibility-notes">Compatibility Notes</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#non-shared-mounts">Non Shared Mounts</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/compatibility/#list-of-distributions-including-distrobox-in-their-repositories">List of Distributions Including Distrobox in Their Repositories</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#new-host-distro-support">New Host Distro Support</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/compatibility/#containers-distros">Containers Distros</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#new-distro-support">New Distro Support</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#older-distributions">Older Distributions</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/compatibility/#gpu-acceleration-support">GPU Acceleration Support</a>
+							</li></ul></li></ul><p>This project <strong>does not need a dedicated image</strong>. It can use any OCI images from
+docker-hub, quay.io, or any registry of your choice.</p>
+<p>Many cloud images are stripped down on purpose to save size and may not include
+commands such as <code>which</code>, <code>mount</code>, <code>less</code> or <code>vi</code>). Additional packages can be
+installed once inside the container. We recommend using your preferred automation
+tool inside the container if you find yourself having to repeatedly create new containers.
+Maintaining your own custom image is also an option.</p>
+<p>The main concern is having basic Linux utilities (<code>mount</code>), basic user management
+utilities (<code>usermod, passwd</code>), and <code>sudo</code> correctly set.</p>
+<h2 id="supported-container-managers">Supported Container Managers<a class="zola-anchor" href="#supported-container-managers" aria-label="Anchor link for: supported-container-managers"><i class="icon"></i></a>
+</h2>
+<p><code>distrobox</code> can run on either <code>podman</code>, <code>docker</code> or <a href="https://github.com/89luca89/lilipod"><code>lilipod</code></a></p>
+<p>It depends either on <code>podman</code> configured in <code>rootless mode</code>
+or on <code>docker</code> configured without sudo (follow <a href="https://docs.docker.com/engine/install/linux-postinstall/">THESE instructions</a>)</p>
+<ul>
+<li>Minimum podman version: <strong>2.1.0</strong></li>
+<li>Minimum docker client version: <strong>19.03.15</strong></li>
+<li>Minimum lilipod version: <strong>v0.0.1</strong></li>
+</ul>
+<p>Follow the official installation guide here:</p>
+<ul>
+<li><a href="https://podman.io/getting-started/installation">https://podman.io/getting-started/installation</a></li>
+<li><a href="https://docs.docker.com/engine/install">https://docs.docker.com/engine/install</a></li>
+<li><a href="https://docs.docker.com/engine/install/linux-postinstall/">https://docs.docker.com/engine/install/linux-postinstall/</a></li>
+</ul>
+<h2 id="host-distros">Host Distros<a class="zola-anchor" href="#host-distros" aria-label="Anchor link for: host-distros"><i class="icon"></i></a>
+</h2>
+<p>Distrobox has been successfully tested on:</p>
+<table><thead><tr><th>Distro</th><th>Version</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Alpine Linux</td><td></td><td>To setup rootless podman, look <a href="https://wiki.alpinelinux.org/wiki/Podman">HERE</a></td></tr>
+<tr><td>Arch Linux</td><td></td><td><code>distrobox</code> is available in the <code>extra</code> repository and <code>distrobox-git</code> is available in the AUR (thanks <a href="https://github.com/M0Rf30">M0Rf30</a>!). <br> To setup rootless podman, look <a href="https://wiki.archlinux.org/title/Podman">HERE</a></td></tr>
+<tr><td>Bazzite</td><td>38</td><td><code>distrobox-git</code> is preinstalled.</td></tr>
+<tr><td>CentOS</td><td>8 <br> 8 Stream <br> 9 Stream</td><td><code>distrobox</code> is available in epel repos. (thanks <a href="https://github.com/alcir">alcir</a>!)</td></tr>
+<tr><td>ChromeOS</td><td>Debian 11 (docker with make-shared workaround #non-shared-mounts) <br> Debian 12 (podman)</td><td>using built-in Linux on ChromeOS mode which is debian-based, which can be <a href="https://wiki.debian.org/DebianUpgrade">upgraded</a> from 11 bullseye to 12 bookworm (in fact 12 is recommended)</td></tr>
+<tr><td>Debian</td><td>11 <br> 12 <br> Testing <br> Unstable</td><td><code>distrobox</code> is available in default repos starting from version 12 (thanks <a href="https://github.com/michel-slm!">michel-slm!</a>!)</td></tr>
+<tr><td>deepin</td><td>23 <br> Testing <br> Unstable</td><td><code>distrobox</code> is available in default repos in <code>testing</code> and <code>unstable</code></td></tr>
+<tr><td>EndlessOS</td><td>4.0.0</td><td></td></tr>
+<tr><td>Fedora Silverblue/Kinoite</td><td>35 <br> 36 <br> 37 <br> Rawhide</td><td><code>distrobox</code> is available in default repos.(thanks <a href="https://github.com/alcir">alcir</a>!)</td></tr>
+<tr><td>Fedora</td><td>35 <br> 36 <br> 37 <br> 38 <br> Rawhide</td><td><code>distrobox</code> is available in default repos.(thanks <a href="https://github.com/alcir">alcir</a>!)</td></tr>
+<tr><td>Gentoo</td><td></td><td>To setup rootless podman, look <a href="https://wiki.gentoo.org/wiki/Podman">HERE</a></td></tr>
+<tr><td>KDE neon</td><td></td><td><code>distrobox</code> is available in default repo</td></tr>
+<tr><td>Manjaro</td><td></td><td>To setup rootless podman, look <a href="https://wiki.archlinux.org/title/Podman">HERE</a></td></tr>
+<tr><td>NixOS</td><td>21.11</td><td>Make sure to mind your executable paths. Sometimes a container will not have nix paths, and sometimes it will not have its own paths.  <br>  Distrobox is available in Nixpkg collection (thanks <a href="https://github.com/AtilaSaraiva">AtilaSaraiva</a>!)&lt; <br> To setup Docker, look <a href="https://wiki.nixos.org/wiki/Docker">HERE</a>  <br> To setup Podman, look <a href="https://wiki.nixos.org/wiki/Podman">HERE</a> and <a href="https://gist.github.com/adisbladis/187204cb772800489ee3dac4acdd9947">HERE</a></td></tr>
+<tr><td>openSUSE</td><td>Leap 15.4 <br> Leap 15.3 <br> Leap 15.2</td><td>Packages are available <a href="https://software.opensuse.org/download/package?package=distrobox&amp;project=home%3Adfaggioli%3Amicroos-desktop">here</a> (thanks <a href="https://github.com/dfaggioli">dfaggioli</a>!).<br> To install on openSUSE Leap 15, Use the following repository links in the <code>zypper addrepo</code> command: <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/15.4/home:dfaggioli:microos-desktop.repo">15.4</a>, <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/15.3/home:dfaggioli:microos-desktop.repo">15.3</a>, <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/15.2/home:dfaggioli:microos-desktop.repo">15.2</a>. Then: <br>  <code>zypper refresh &amp;&amp; zypper install distrobox</code>. <br> <code>Podman</code> under SUSE Leap, cannot initialize correctly the containers managed by <code>distrobox</code> until <a href="https://bugzilla.opensuse.org/show_bug.cgi?id=1199871">this openSUSE bug</a> is fixed, or <code>podman</code> logging is configured properly.</td></tr>
+<tr><td>openSUSE</td><td>Tumbleweed <br> Aeon/Kalpa</td><td><code>distrobox</code> is available in default repos (thanks <a href="https://github.com/dfaggioli">dfaggioli</a>!) <br> For Tumbleweed, do: <code>zypper install distrobox</code>. <br> For Aeon/Kalpa, <strong>distrobox is installed by default</strong>.</td></tr>
+<tr><td>SUSE Linux Enterprise Server</td><td>15 Service Pack 4 <br> 15 Service Pack 3 <br> 15 Service Pack 2</td><td>Same procedure as the one for openSUSE (Leap, respective versions, of course). Use the following repository links in the <code>zypper addrepo</code> command: <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/15.4/home:dfaggioli:microos-desktop.repo">SLE-15-SP4</a>, <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/15.3/home:dfaggioli:microos-desktop.repo">SLE-15-SP3</a>, <a href="https://download.opensuse.org/repositories/home:dfaggioli:microos-desktop/SLE_15_SP2/home:dfaggioli:microos-desktop.repo">SLE-15-SP4</a>. Then: <br>  <code>zypper refresh &amp;&amp; zypper install distrobox</code>. <br> <code>Podman</code> under SUSE Leap, cannot initialize correctly the containers managed by <code>distrobox</code> until <a href="https://bugzilla.opensuse.org/show_bug.cgi?id=1199871">this openSUSE bug</a> is fixed, or <code>podman</code> logging is configured properly.</td></tr>
+<tr><td>SteamOS</td><td></td><td>You can follow the <a href="https://daudix.github.io/distrobox/posts/install-podman-static/">Install Podman in a static manner</a> or <a href="https://daudix.github.io/distrobox/posts/install-lilipod-static/">Install Lilipod in a static manner</a> guide, this will install it in your $HOME and it will survive updates.</td></tr>
+<tr><td>RedHat</td><td>8 <br> 9</td><td><code>distrobox</code> is available in epel repos. (thanks <a href="https://github.com/alcir">alcir</a>!)</td></tr>
+<tr><td>Ubuntu</td><td>18.04 <br> 20.04 <br> 22.04 <br> 22.10 <br> 23.04 <br></td><td>Older versions based on 20.04 or earlier may need external repos to install newer Podman and Docker releases. <br> Derivatives like Pop_OS!, Mint and Elementary OS should work the same. <br> <a href="https://launchpad.net/~michel-slm/+archive/ubuntu/distrobox">Now PPA available!</a>, also <code>distrobox</code> is available in default repos from <code>22.10</code> onward (thanks <a href="https://github.com/michel-slm">michel-slm</a>!)</td></tr>
+<tr><td>Vanilla OS</td><td>22.10 <br> Orchid</td><td><code>distrobox</code> should be installed in the home directory using the official script</td></tr>
+<tr><td>Void Linux</td><td>glibc <br> musl</td><td></td></tr>
+<tr><td>Windows</td><td>Oracle Linux 9</td><td>using built-in Windows Subsystem for Linux</td></tr>
+</tbody></table>
+<h3 id="compatibility-notes">Compatibility Notes<a class="zola-anchor" href="#compatibility-notes" aria-label="Anchor link for: compatibility-notes"><i class="icon"></i></a>
+</h3>
+<h3 id="non-shared-mounts">Non Shared Mounts<a class="zola-anchor" href="#non-shared-mounts" aria-label="Anchor link for: non-shared-mounts"><i class="icon"></i></a>
+</h3>
+<p>Note also that in some distributions, root filesystem is <strong>not</strong> mounted as a shared mount,
+this will give an error like:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox-enter</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Error</span></span><span class="z-meta z-function-call z-arguments z-shell"> response from daemon: path /sys is mounted on /sys but it is not a shared or slave mount</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Error:</span></span><span class="z-meta z-function-call z-arguments z-shell"> failed to start containers: ...</span>
+</span></code></pre>
+<p>To resolve this, use this command:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">mount</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>make-rshared</span> /</span>
+</span></code></pre>
+<p>To make it permanent, you can place it in <code>/etc/rc.local</code>.</p>
+<h2 id="list-of-distributions-including-distrobox-in-their-repositories">List of Distributions Including Distrobox in Their Repositories<a class="zola-anchor" href="#list-of-distributions-including-distrobox-in-their-repositories" aria-label="Anchor link for: list-of-distributions-including-distrobox-in-their-repositories"><i class="icon"></i></a>
+</h2>
+<p><a href="https://repology.org/project/distrobox/versions"><img src="https://repology.org/badge/vertical-allrepos/distrobox.svg#no-hover" alt="Packaging status" /></a></p>
+<h3 id="new-host-distro-support">New Host Distro Support<a class="zola-anchor" href="#new-host-distro-support" aria-label="Anchor link for: new-host-distro-support"><i class="icon"></i></a>
+</h3>
+<p>If your distro of choice is not on the list, open an issue requesting support
+for it, we can work together to check if it is possible to add support for it.</p>
+<p>Or just try using it anyway, if it works, open an issue
+and it will be added to the list!</p>
+<hr />
+<h2 id="containers-distros">Containers Distros<a class="zola-anchor" href="#containers-distros" aria-label="Anchor link for: containers-distros"><i class="icon"></i></a>
+</h2>
+<p>Distrobox guests tested successfully with the following container images:</p>
+<table><thead><tr><th>Distro</th><th>Version</th><th>Images</th></tr></thead><tbody>
+<tr><td>AlmaLinux (Toolbox)</td><td>8 <br> 9</td><td>quay.io/toolbx-images/almalinux-toolbox:8 <br> quay.io/toolbx-images/almalinux-toolbox:9 <br> quay.io/toolbx-images/almalinux-toolbox:latest</td></tr>
+<tr><td>Alpine (Toolbox)</td><td>3.16 <br> 3.17 <br> 3.18 <br> 3.19 <br> edge</td><td>quay.io/toolbx-images/alpine-toolbox:3.16 <br> quay.io/toolbx-images/alpine-toolbox:3.17 <br> quay.io/toolbx-images/alpine-toolbox:3.18 <br> quay.io/toolbx-images/alpine-toolbox:3.19 <br> quay.io/toolbx-images/alpine-toolbox:edge <br> quay.io/toolbx-images/alpine-toolbox:latest</td></tr>
+<tr><td>AmazonLinux (Toolbox)</td><td>2 <br> 2022</td><td>quay.io/toolbx-images/amazonlinux-toolbox:2 <br> quay.io/toolbx-images/amazonlinux-toolbox:2023 <br> quay.io/toolbx-images/amazonlinux-toolbox:latest</td></tr>
+<tr><td>Archlinux (Toolbox)</td><td></td><td>quay.io/toolbx/arch-toolbox:latest</td></tr>
+<tr><td>Bazzite Arch</td><td></td><td>ghcr.io/ublue-os/bazzite-arch:latest <br> ghcr.io/ublue-os/bazzite-arch-gnome:latest</td></tr>
+<tr><td>Centos (Toolbox)</td><td>stream8 <br> stream9</td><td>quay.io/toolbx-images/centos-toolbox:stream8 <br> quay.io/toolbx-images/centos-toolbox:stream9 <br> quay.io/toolbx-images/centos-toolbox:latest</td></tr>
+<tr><td>Debian (Toolbox)</td><td>10 <br> 11 <br> 12 <br> testing <br> unstable <br></td><td>quay.io/toolbx-images/debian-toolbox:10 <br> quay.io/toolbx-images/debian-toolbox:11 <br> quay.io/toolbx-images/debian-toolbox:12 <br> quay.io/toolbx-images/debian-toolbox:testing <br> quay.io/toolbx-images/debian-toolbox:unstable <br> quay.io/toolbx-images/debian-toolbox:latest</td></tr>
+<tr><td>Fedora (Toolbox)</td><td>37 <br> 38 <br> 39 <br> Rawhide</td><td>registry.fedoraproject.org/fedora-toolbox:37 <br> registry.fedoraproject.org/fedora-toolbox:38 <br> registry.fedoraproject.org/fedora-toolbox:39 <br> registry.fedoraproject.org/fedora-toolbox:40 <br> registry.fedoraproject.org/fedora-toolbox:rawhide</td></tr>
+<tr><td>openSUSE (Toolbox)</td><td></td><td>registry.opensuse.org/opensuse/distrobox:latest</td></tr>
+<tr><td>RedHat (Toolbox)</td><td>8 <br> 9</td><td>registry.access.redhat.com/ubi8/toolbox <br> registry.access.redhat.com/ubi9/toolbox <br> quay.io/toolbx-images/rhel-toolbox:latest</td></tr>
+<tr><td>Rocky Linux (Toolbox)</td><td>8 <br> 9</td><td>quay.io/toolbx-images/rockylinux-toolbox:8 <br> quay.io/toolbx-images/rockylinux-toolbox:9 <br> quay.io/toolbx-images/rockylinux-toolbox:latest</td></tr>
+<tr><td>Ubuntu (Toolbox)</td><td>16.04 <br> 18.04 <br> 20.04 <br> 22.04</td><td>quay.io/toolbx/ubuntu-toolbox:16.04 <br> quay.io/toolbx/ubuntu-toolbox:18.04 <br> quay.io/toolbx/ubuntu-toolbox:20.04 <br> quay.io/toolbx/ubuntu-toolbox:22.04 <br> quay.io/toolbx/ubuntu-toolbox:latest</td></tr>
+<tr><td>Ublue</td><td>bluefin-cli</td><td>ghcr.io/ublue-os/bluefin-cli</td></tr>
+<tr><td></td><td></td><td></td></tr>
+<tr><td>AlmaLinux</td><td>8 <br> 8-minimal <br> 9 <br> 9-minimal</td><td>docker.io/library/almalinux:8 <br> docker.io/library/almalinux:9</td></tr>
+<tr><td>Alpine Linux</td><td>3.15 <br> 3.16 <br> 3.17 <br> 3.18 <br> 3.19 <br> edge</td><td>docker.io/library/alpine:3.15 <br> docker.io/library/alpine:3.16 <br> docker.io/library/alpine:3.17 <br> docker.io/library/alpine:3.18 <br> docker.io/library/alpine:3.19 <br> docker.io/library/alpine:edge <br> docker.io/library/alpine:latest</td></tr>
+<tr><td>AmazonLinux</td><td>1 <br> 2 <br> 2023</td><td>public.ecr.aws/amazonlinux/amazonlinux:1 <br> public.ecr.aws/amazonlinux/amazonlinux:2 <br>  public.ecr.aws/amazonlinux/amazonlinux:2023</td></tr>
+<tr><td>Archlinux</td><td></td><td>docker.io/library/archlinux:latest</td></tr>
+<tr><td>Blackarch</td><td></td><td>docker.io/blackarchlinux/blackarch:latest</td></tr>
+<tr><td>CentOS Stream</td><td>8 <br> 9</td><td>quay.io/centos/centos:stream8 <br> quay.io/centos/centos:stream9</td></tr>
+<tr><td>CentOS</td><td>7</td><td>quay.io/centos/centos:7</td></tr>
+<tr><td>Chainguard Wolfi</td><td></td><td>cgr.dev/chainguard/wolfi-base:latest</td></tr>
+<tr><td>ClearLinux</td><td></td><td>docker.io/library/clearlinux:latest <br> docker.io/library/clearlinux:base</td></tr>
+<tr><td>Crystal Linux</td><td></td><td>registry.gitlab.com/crystal-linux/misc/docker:latest</td></tr>
+<tr><td>Debian</td><td>7 <br> 8 <br> 9 <br> 10 <br> 11 <br> 12</td><td>docker.io/debian/eol:wheezy <br> docker.io/library/debian:buster <br> docker.io/library/debian:bullseye-backports <br> docker.io/library/debian:bookworm-backports <br> docker.io/library/debian:stable-backports</td></tr>
+<tr><td>Debian</td><td>Testing</td><td>docker.io/library/debian:testing  <br>  docker.io/library/debian:testing-backports</td></tr>
+<tr><td>Debian</td><td>Unstable</td><td>docker.io/library/debian:unstable</td></tr>
+<tr><td>deepin</td><td>20 (apricot) <br> 23 (beige)</td><td>docker.io/linuxdeepin/apricot</td></tr>
+<tr><td>Fedora</td><td>36 <br> 37 <br> 38 <br> 39 <br> Rawhide</td><td>quay.io/fedora/fedora:36 <br> quay.io/fedora/fedora:37 <br> quay.io/fedora/fedora:38 <br> quay.io/fedora/fedora:39 <br> quay.io/fedora/fedora:rawhide</td></tr>
+<tr><td>Gentoo Linux</td><td>rolling</td><td>docker.io/gentoo/stage3:latest</td></tr>
+<tr><td>KDE neon</td><td>Latest</td><td>invent-registry.kde.org/neon/docker-images/plasma:latest</td></tr>
+<tr><td>Kali Linux</td><td>rolling</td><td>docker.io/kalilinux/kali-rolling:latest</td></tr>
+<tr><td>Mint</td><td>21.1</td><td>docker.io/linuxmintd/mint21.1-amd64</td></tr>
+<tr><td>Neurodebian</td><td>nd100</td><td>docker.io/library/neurodebian:nd100</td></tr>
+<tr><td>openSUSE</td><td>Leap</td><td>registry.opensuse.org/opensuse/leap:latest</td></tr>
+<tr><td>openSUSE</td><td>Tumbleweed</td><td>registry.opensuse.org/opensuse/distrobox:latest  <br> registry.opensuse.org/opensuse/tumbleweed:latest  <br>  registry.opensuse.org/opensuse/toolbox:latest</td></tr>
+<tr><td>Oracle Linux</td><td>7 <br> 7-slim <br> 8 <br> 8-slim <br> 9 <br> 9-slim</td><td>container-registry.oracle.com/os/oraclelinux:7 <br> container-registry.oracle.com/os/oraclelinux:7-slim <br> container-registry.oracle.com/os/oraclelinux:8 <br> container-registry.oracle.com/os/oraclelinux:8-slim <br> container-registry.oracle.com/os/oraclelinux:9 <br> container-registry.oracle.com/os/oraclelinux:9-slim</td></tr>
+<tr><td>RedHat (UBI)</td><td>7 <br> 8 <br> 9</td><td>registry.access.redhat.com/ubi7/ubi <br> registry.access.redhat.com/ubi8/ubi <br> registry.access.redhat.com/ubi8/ubi-init <br> registry.access.redhat.com/ubi8/ubi-minimal <br> registry.access.redhat.com/ubi9/ubi <br> registry.access.redhat.com/ubi9/ubi-init <br> registry.access.redhat.com/ubi9/ubi-minimal</td></tr>
+<tr><td>Rocky Linux</td><td>8 <br> 8-minimal <br> 9</td><td>quay.io/rockylinux/rockylinux:8 <br> quay.io/rockylinux/rockylinux:8-minimal <br> quay.io/rockylinux/rockylinux:9 <br> quay.io/rockylinux/rockylinux:latest</td></tr>
+<tr><td>Scientific Linux</td><td>7</td><td>docker.io/library/sl:7</td></tr>
+<tr><td>Slackware</td><td></td><td>docker.io/vbatts/slackware:current</td></tr>
+<tr><td>SteamOS</td><td></td><td>ghcr.io/linuxserver/steamos:latest</td></tr>
+<tr><td>Ubuntu</td><td>14.04 <br> 16.04 <br> 18.04 <br> 20.04 <br> 22.04 <br> 23.04</td><td>docker.io/library/ubuntu:14.04 <br> docker.io/library/ubuntu:16.04 <br> docker.io/library/ubuntu:18.04 <br> docker.io/library/ubuntu:20.04 <br> docker.io/library/ubuntu:22.04 <br> docker.io/library/ubuntu:23.04</td></tr>
+<tr><td>Vanilla OS</td><td>VSO</td><td>ghcr.io/vanilla-os/vso:main</td></tr>
+<tr><td>Void Linux</td><td>glibc <br> musl</td><td>ghcr.io/void-linux/void-glibc-full:latest <br> ghcr.io/void-linux/void-musl-full:latest</td></tr>
+</tbody></table>
+<p>Images marked with <strong>Toolbox</strong> are tailored images made by the community efforts in <a href="https://github.com/toolbx-images/images">toolbx-images/images</a>,
+so they are more indicated for desktop use, and first setup will take less time.
+Note however that if you use a non-toolbox preconfigured image,
+the <strong>first</strong> <code>distrobox-enter</code> you’ll perform
+can take a while as it will download and install the missing dependencies.</p>
+<p>A small time tax to pay for the ability to use any type of image.
+This will <strong>not</strong> occur after the first time, <strong>subsequent enters will be much faster.</strong></p>
+<p>NixOS is not a supported container distro, and there are currently no plans to
+bring support to it. If you are looking for unprivileged NixOS environments,
+we suggest you look into <a href="https://nixos.org/manual/nix/unstable/command-ref/nix-shell.html">nix-shell</a>
+or <a href="https://github.com/DavHau/nix-portable">nix portable</a></p>
+<h3 id="new-distro-support">New Distro Support<a class="zola-anchor" href="#new-distro-support" aria-label="Anchor link for: new-distro-support"><i class="icon"></i></a>
+</h3>
+<p>If your distro of choice is not on the list, open an issue requesting support
+for it, we can work together to check if it is possible to add support for it.</p>
+<p>Or just try using it anyway, if it works, open an issue
+and it will be added to the list!</p>
+<h3 id="older-distributions">Older Distributions<a class="zola-anchor" href="#older-distributions" aria-label="Anchor link for: older-distributions"><i class="icon"></i></a>
+</h3>
+<p>For older distributions like CentOS 5, CentOS 6, Debian 6, Ubuntu 12.04,
+compatibility is not assured.</p>
+<p>Their <code>libc</code> version is incompatible with kernel releases after <code>&gt;=4.11</code>.
+A work around this is to use the <code>vsyscall=emulate</code> flag in the bootloader of the
+host.</p>
+<p>Keep also in mind that mirrors could be down for such old releases, so you will
+need to build a <a href="https://daudix.github.io/distrobox/posts/distrobox-custom/">custom distrobox image to ensure basic dependencies are met</a>.</p>
+<h3 id="gpu-acceleration-support">GPU Acceleration Support<a class="zola-anchor" href="#gpu-acceleration-support" aria-label="Anchor link for: gpu-acceleration-support"><i class="icon"></i></a>
+</h3>
+<p>For Intel and AMD Gpus, the support is baked in, as the containers will install
+their latest available mesa/dri drivers.</p>
+<p>For NVidia, you can use the <code>--nvidia</code> flag during create, see <a href="https://daudix.github.io/distrobox/usage/distrobox-create/">distrobox-create</a>
+documentation to discover how to use it.</p>
+<p>Alternatively, you can use the <a href="https://daudix.github.io/distrobox/useful-tips/#using-nvidia-container-toolkit">nvidia-container-toolkit</a>
+utility to set up the integration independently from the distrobox’s own flag.</p>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

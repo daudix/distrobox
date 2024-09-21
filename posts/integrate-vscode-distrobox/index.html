@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Integrate Vscode and Distrobox - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Integrate Vscode and Distrobox - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>Integrate Vscode and Distrobox</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#from-distrobox">From Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#from-flatpak">From Flatpak</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#first-step-install-it">First Step Install It</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#second-step-extensions">Second Step, Extensions</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#third-step-podman-wrapper">Third Step Podman Wrapper</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#final-result">Final Result</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/integrate-vscode-distrobox/#open-vscode-directly-attached-to-our-distrobox">Open VSCode Directly Attached to Our Distrobox</a></li></ul><p>VScode doesn’t need presentations, and it’s a powerful tool for development.
+You may want to use it, but how to handle the dualism between host and container?</p>
+<p>In this experiment we will use <a href="https://vscodium.com/">VSCodium</a> as an opensource
+alternative to VSCode.</p>
+<p>Here are a couple of solutions.</p>
+<h2 id="from-distrobox">From Distrobox</h2>
+<p>Well, you could just install VSCode in your Distrobox of choice, and export it!</p>
+<p>For example using an Arch Linux container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> archlinux:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> arch-distrobox</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox enter<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> arch-distrobox</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@arch-distrobox:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span>
+</span></code></pre>
+<p>Download the deb file
+<a href="https://github.com/VSCodium/vscodium/releases">HERE</a>, or in Arch case just install</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@arch-distrobox:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo pacman<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>S</span> code</span>
+</span></code></pre>
+<p>Now that we have installed it, we can export it:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@ubuntu-distrobox:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox-export<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>app</span> code</span>
+</span></code></pre>
+<p>And that’s really it, you’ll have VSCode in your app list, and it will run from
+the Distrobox itself, so it will have access to all the software and tools inside
+it without problems.</p>
+<p><img src="https://user-images.githubusercontent.com/598882/149206335-1a2d0edd-8b2f-437d-aae0-44b9723d2c30.png" alt="image" />
+<img src="https://user-images.githubusercontent.com/598882/149206414-56bdbc5a-3728-45ef-8dd4-2e168a0d7ccc.png#transparent" alt="image" /></p>
+<h2 id="from-flatpak">From Flatpak</h2>
+<p>Alternatively you may want to install VSCode on your host. We will explore how
+to integrate VSCode installed via <strong>Flatpak</strong> with Distrobox.</p>
+<p>For this one you’ll need to use VSCode from Microsoft, and not VSCodium, in order
+to have access to the remote containers extension.</p>
+<h3 id="first-step-install-it">First Step Install It</h3>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> flatpak install<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> app/com.visualstudio.code </span>
+</span></code></pre>
+<h3 id="second-step-extensions">Second Step, Extensions</h3>
+<p>Now we want to install VSCode <a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers">Dev Containers extension</a></p>
+<p><img src="https://user-images.githubusercontent.com/598882/149207447-76a82e91-dd3f-43fa-8c52-9c2e85ae8fee.png#transparent" alt="image" /></p>
+<h3 id="third-step-podman-wrapper">Third Step Podman Wrapper</h3>
+<p>Being in a Flatpak, we will need access to host’s <code>podman</code> to be
+able to use the containers. Place this in your <code>~/.local/bin/podman-host</code>
+In case of access to host’s <code>docker</code> to be
+able to use the containers, use <code>~/.local/bin/docker-host</code></p>
+<p>For podman:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/extras/podman-host<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>o</span> <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/podman-host</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chmod</span></span><span class="z-meta z-function-call z-arguments z-shell"> +x <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/podman-host</span>
+</span></code></pre>
+<p>For docker:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/extras/docker-host<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>o</span> <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/docker-host</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chmod</span></span><span class="z-meta z-function-call z-arguments z-shell"> +x <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/docker-host</span>
+</span></code></pre>
+<p>Open VSCode settings (Ctrl+,) and head to <code>Remote&gt;Containers&gt;Docker Path</code> and
+set it to the path of <code>/home/&lt;your-user&gt;/.local/bin/podman-host</code> (or docker-host in case of docker), like in the example</p>
+<p><img src="https://user-images.githubusercontent.com/598882/149208525-5ad630c9-fcbc-4ee6-9d77-e50d2c782a56.png#transparent" alt="image" /></p>
+<p>This will give a way to execute host’s container manager from within the
+flatpak app.</p>
+<p><strong>This works for Distrobox both inside and outside a flatpak</strong>
+This will act only for containers created with Distrobox, you can still use regular devcontainers
+without transparently if needed.</p>
+<h2 id="final-result">Final Result</h2>
+<p>After that, we’re good to go! Open VSCode and Attach to Remote Container:</p>
+<p><img src="https://user-images.githubusercontent.com/598882/149210561-2f1839ae-9a57-42fc-a122-21652588e327.png" alt="image" /></p>
+<p>And let’s choose our Distrobox</p>
+<p><img src="https://user-images.githubusercontent.com/598882/149210690-8bcb9a0d-1dc5-4937-9494-8c6aa6b26fd5.png" alt="image" /></p>
+<p>And we’re good to go! We have our VSCode remote session inside our Distrobox container!</p>
+<p><img src="https://user-images.githubusercontent.com/598882/149210881-749a8146-c69d-4382-bbef-91e4b477b7ba.png#transparent" alt="image" /></p>
+<h2 id="open-vscode-directly-attached-to-our-distrobox">Open VSCode Directly Attached to Our Distrobox</h2>
+<p>You may want to instead have a more direct way to launch your VSCode when you’re already in your project directory,
+in this case you can use <code>vscode-distrobox</code> script:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/extras/vscode-distrobox<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>o</span> <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/vscode-distrobox</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chmod</span></span><span class="z-meta z-function-call z-arguments z-shell"> +x <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local/bin/vscode-distrobox</span>
+</span></code></pre>
+<p>This will make it easy to launch VSCode attached to target distrobox, on a target path:</p>
+<p><code>vscode-distrobox my-distrobox /path/to/project</code></p>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

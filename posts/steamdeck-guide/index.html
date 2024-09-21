@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Install on Steamdeck - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/posts/steamdeck-guide/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Install on Steamdeck - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/posts/steamdeck-guide/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>Install on Steamdeck</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#option-1-install-distrobox-in-home">Option 1: Install distrobox in $HOME</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#option-2-overwrite-the-provided-distrobox-installation-in-steamos">Option 2: Overwrite the Provided distrobox Installation in SteamOS</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#steamos-3-4-and-earlier">SteamOS 3.4 and Earlier</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#install-podman">Install Podman</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#alternative-install-lilipod">Alternative Install Lilipod</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#install-distrobox">Install Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#setup-distroboxrc">Setup ~&#x2F;.distroboxrc</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/#start-using-it">Start Using It</a></li></ul><p>Latest SteamOS (version 3.5 and later) already pre-installed <code>distrobox</code> and <code>podman</code>.</p>
+<p>Before using <code>distrobox</code> on SteamOS, it may be necessary to upgrade to the latest version since the version provided by
+SteamOS may be outdated. You can verify the currently installed version by running the command <code>distrobox version</code>. For
+instance, on SteamOS 3.5, version 1.4.2.1-3 of <code>distrobox</code> is installed.</p>
+<p>To upgrade <code>distrobox</code> on SteamOS, you have two options:</p>
+<h3 id="option-1-install-distrobox-in-home">Option 1: Install <code>distrobox</code> in <code>$HOME</code></h3>
+<p>By installing <code>distrobox</code> in your <code>$HOME</code> directory, you can ensure that you have control over the version you’re using,
+independent of SteamOS updates. This method prevents your modifications from being reverted when SteamOS is updated.</p>
+<p>Note that it’s essential to add this new version of <code>distrobox</code> to your PATH to ensure it’s utilized over the
+SteamOS-provided version.</p>
+<p>To install <code>distrobox</code> in the <code>$HOME</code> directory, run the following command:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --prefix <span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">HOME</span></span></span>
+</span></code></pre>
+<p>For more detailed installation instructions, refer to the documentation
+<a href="https://daudix.github.io/distrobox/#alternative-methods">here</a>.</p>
+<p>To upgrade the version of <code>distrobox</code>, follow the instructions provided in the documentation link above.</p>
+<h3 id="option-2-overwrite-the-provided-distrobox-installation-in-steamos">Option 2: Overwrite the Provided <code>distrobox</code> Installation in SteamOS</h3>
+<p>An alternative approach is to upgrade the version of <code>distrobox</code> provided by SteamOS. While this simplifies management
+as you don’t need to modify your PATH and you wouldn’t have 2 versions of <code>distrobox</code> installed, it comes with the
+downside that your upgrades will be overwritten when SteamOS is updated.</p>
+<p>To upgrade the <code>distrobox</code> version provided by SteamOS, execute the following commands:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> steamos-readonly disable</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --prefix /usr</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> steamos-readonly enable</span>
+</span></code></pre>
+<p>Please note that disabling the read-only state is necessary to perform this upgrade. You can find more information about
+this requirement <a href="https://help.steampowered.com/en/faqs/view/671A-4453-E8D2-323C">here</a>.</p>
+<p>Once <code>distrobox</code> is upgraded, you can use it as normal.</p>
+<hr />
+<p>To run GUI application, add following line to <code>~/.distroboxrc</code>.</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">xhost</span></span><span class="z-meta z-function-call z-arguments z-shell"> +si:localuser:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span> <span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span>/dev/null</span>
+</span></code></pre>
+<p>This is needed to ensure the graphical apps can talk to the Xwayland session.</p>
+<p>You can now start using <code>distrobox</code> on the deck, open the terminal and go:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create</span> <span class="z-keyword z-operator z-logical z-and z-shell">&amp;&amp;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter</span>
+</span></code></pre>
+<p>Refer to the <a href="https://daudix.github.io/distrobox/#quick-start">quickstart guide</a> and to the <a href="https://daudix.github.io/distrobox/usage/">usage docs</a>
+And don’t forget the <a href="https://daudix.github.io/distrobox/useful-tips/">useful tips</a>!</p>
+<h2 id="steamos-3-4-and-earlier">SteamOS 3.4 and Earlier</h2>
+<p>To install Distrobox on the steamdeck, we can install both <code>podman</code> and <code>distrobox</code>
+inside the <code>$HOME</code> so that containers will survive updates.</p>
+<h2 id="install-podman">Install Podman</h2>
+<p>To install podman, <a href="https://daudix.github.io/distrobox/posts/install-podman-static/">refer to the install guide</a>:</p>
+<ul>
+<li>Download the latest release of <code>podman-launcher</code> and place it in your home and rename it to <code>podman</code>,
+this example will use <code>~/.local/bin</code></li>
+<li>Make the <code>podman</code> binary executable:
+<ul>
+<li><code>chmod +x ~/.local/bin/podman</code></li>
+</ul>
+</li>
+<li>Setup <code>deck</code> user password using:
+<ul>
+<li><code>passwd</code></li>
+</ul>
+</li>
+<li>Setup <code>deck</code> user uidmap:
+<ul>
+<li><code>sudo touch /etc/subuid /etc/subgid</code></li>
+<li><code>sudo usermod --add-subuid 100000-165535 --add-subgid 100000-165535 deck</code></li>
+</ul>
+</li>
+</ul>
+<p>And <code>podman</code> is ready to use!</p>
+<h3 id="alternative-install-lilipod">Alternative Install Lilipod</h3>
+<p>To install <a href="https://github.com/89luca89/lilipod">lilipod</a>, <a href="https://daudix.github.io/distrobox/posts/install-lilipod-static/">refer to the install guide</a>:</p>
+<ul>
+<li>Download the latest release of <code>lilipod</code> and place it in your home and rename it to <code>lilipod</code>,
+this example will use <code>~/.local/bin</code></li>
+<li>Setup <code>deck</code> user password using:
+<ul>
+<li><code>passwd</code></li>
+</ul>
+</li>
+<li>Setup <code>deck</code> user uidmap:
+<ul>
+<li><code>sudo touch /etc/subuid /etc/subgid</code></li>
+<li><code>sudo usermod --add-subuid 100000-165535 --add-subgid 100000-165535 deck</code></li>
+</ul>
+</li>
+</ul>
+<p>And <code>lilipod</code> is ready to use!</p>
+<h2 id="install-distrobox">Install Distrobox</h2>
+<p>Installing distrobox in HOME is quite straightforward:</p>
+<ul>
+<li>Install <code>distrobox</code> in your HOME following the <code>curl</code> instructions:
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#curl-or-wget">INSTALL</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="setup-distroboxrc">Setup ~/.distroboxrc</h2>
+<p>We need to add some tweaks to our <code>~/.distroboxrc</code> to have GUI and Audio working
+correctly in SteamOS</p>
+<p>Ensure your <code>~/.distroboxrc</code> has this content:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">xhost</span></span><span class="z-meta z-function-call z-arguments z-shell"> +si:localuser:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span> <span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span>/dev/null</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-storage z-modifier z-shell">export</span> <span class="z-variable z-other z-readwrite z-assignment z-shell">PIPEWIRE_RUNTIME_DIR</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">/dev/null</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-storage z-modifier z-shell">export</span> <span class="z-variable z-other z-readwrite z-assignment z-shell">PATH</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">PATH</span></span>:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">HOME</span></span>/.local/bin</span></span>
+</span></code></pre>
+<p>This will force the use of <code>pulseaudio</code> inside the container, right now <code>pipewire</code>
+is not working correctly inside the container, and it’s a SteamOS specific issue.</p>
+<p><code>xhost</code> is needed to ensure the graphical apps can talk to the Xwayland session.</p>
+<p><code>PATH</code> is needed to ensure distrobox can find the <code>podman</code> binary we previously
+downloaded.</p>
+<h2 id="start-using-it">Start Using It</h2>
+<p>You can now start using <code>distrobox</code> on the deck, open the terminal and go:</p>
+<p><code>distrobox create &amp;&amp; distrobox enter</code></p>
+<p>Refer to the <a href="https://daudix.github.io/distrobox/#quick-start">quickstart guide</a> and to the <a href="https://daudix.github.io/distrobox/usage/">usage docs</a>
+And don’t forget the <a href="https://daudix.github.io/distrobox/useful-tips/">useful tips</a>!</p>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

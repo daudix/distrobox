@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Useful Tips - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/useful-tips/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Useful Tips - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/useful-tips/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/"class="active">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>Useful Tips</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#detect-if-you-re-in-a-distrobox">Detect If You’re in a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#launch-a-distrobox-from-you-applications-list">Launch a Distrobox from You Applications List</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#create-a-distrobox-with-a-custom-home-directory">Create a Distrobox with a Custom HOME Directory</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#mount-additional-volumes-in-a-distrobox">Mount Additional Volumes in a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#use-a-different-shell-than-the-host">Use a Different Shell than the Host</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#run-the-container-with-real-root">Run the Container with Real Root</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#run-debian-ubuntu-container-behind-proxy">Run Debian&#x2F;ubuntu Container behind Proxy</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-a-command-other-than-sudo-to-run-a-rootful-container">Using a Command Other than Sudo to Run a Rootful Container</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#duplicate-an-existing-distrobox">Duplicate an Existing Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#export-to-the-host">Export to the Host</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#execute-commands-on-the-host">Execute Commands on the Host</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#resolve-error-cannot-open-display-0">Resolve “Error cannot open display: :0”</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-init-system-inside-a-distrobox">Using Init System inside a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-docker-inside-a-distrobox">Using Docker inside a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-podman-inside-a-distrobox">Using Podman inside a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-lxc-inside-a-distrobox">Using LXC inside a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-waydroid-inside-a-distrobox">Using Waydroid inside a Distrobox</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/useful-tips/#manual-installation">Manual Installation</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/useful-tips/#automated-installation">Automated Installation</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-host-s-podman-or-docker-inside-a-distrobox">Using Host’s Podman or Docker inside a Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-distrobox-as-main-cli">Using Distrobox as Main CLI</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-a-different-architecture">Using a Different Architecture</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#using-the-gpu-inside-the-container">Using the GPU inside the Container</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/useful-tips/#using-nvidia-container-toolkit">Using nvidia-container-toolkit</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#slow-creation-on-podman-and-image-size-getting-bigger-with-distrobox-create">Slow Creation on Podman and Image Size Getting Bigger with Distrobox Create</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#permission-problems-when-using-virtualbox">Permission Problems When Using VirtualBox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#container-save-and-restore">Container save and Restore</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#check-used-resources">Check Used Resources</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#pre-installing-additional-package-repositories">Pre-Installing Additional Package Repositories</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#apply-resource-limitation-on-the-fly">Apply Resource Limitation on the Fly</a></li><li>
+				<a href="https://daudix.github.io/distrobox/useful-tips/#copy-text-to-host-clipboard">Copy Text to Host Clipboard</a></li></ul><h2 id="detect-if-you-re-in-a-distrobox">Detect If You’re in a Distrobox<a class="zola-anchor" href="#detect-if-you-re-in-a-distrobox" aria-label="Anchor link for: detect-if-you-re-in-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>Being this tightly integrated, it may be useful to know when you’re in a container or not.</p>
+<p>To detect you can just check the environment variable <code>"${CONTAINER_ID}"</code>, if set, you’re in a distrobox.</p>
+<h2 id="launch-a-distrobox-from-you-applications-list">Launch a Distrobox from You Applications List<a class="zola-anchor" href="#launch-a-distrobox-from-you-applications-list" aria-label="Anchor link for: launch-a-distrobox-from-you-applications-list"><i class="icon"></i></a>
+</h2>
+<p>Starting from distrobox 1.4.0, containers created will automatically generate a desktop entry.
+For contaias ners generated with older versions, you can use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> generate-entry you-container-name</span>
+</span></code></pre>
+<p>To delete it:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> generate-entry you-container-name<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>delete</span></span>
+</span></code></pre>
+<h2 id="create-a-distrobox-with-a-custom-home-directory">Create a Distrobox with a Custom HOME Directory<a class="zola-anchor" href="#create-a-distrobox-with-a-custom-home-directory" aria-label="Anchor link for: create-a-distrobox-with-a-custom-home-directory"><i class="icon"></i></a>
+</h2>
+<p><code>distrobox create</code> supports the use of the <code>--home</code> flag, as specified in the
+usage <a href="https://daudix.github.io/distrobox/usage/distrobox-create/">HERE</a></p>
+<p>Simply use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> your-chosen-image:tag<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>home</span> /your/custom/home</span>
+</span></code></pre>
+<h2 id="mount-additional-volumes-in-a-distrobox">Mount Additional Volumes in a Distrobox<a class="zola-anchor" href="#mount-additional-volumes-in-a-distrobox" aria-label="Anchor link for: mount-additional-volumes-in-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p><code>distrobox create</code> supports the use of the <code>--volume</code> flag, as specified in the
+usage <a href="https://daudix.github.io/distrobox/usage/distrobox-create/">HERE</a></p>
+<p>Simply use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> your-chosen-image:tag<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>volume</span> /your/custom/volume/path</span>
+</span></code></pre>
+<h2 id="use-a-different-shell-than-the-host">Use a Different Shell than the Host<a class="zola-anchor" href="#use-a-different-shell-than-the-host" aria-label="Anchor link for: use-a-different-shell-than-the-host"><i class="icon"></i></a>
+</h2>
+<p>From version 1.4.0, <code>distrobox enter</code> will execute the login shell of the container’s user
+by default. So, just change the default shell in the container using:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chsh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> /bin/shell-to-use</span>
+</span></code></pre>
+<p>exit and log back in the container.</p>
+<p>For version older than 1.4.0, distrobox will pick up the shell from the host and use it inside the container.
+If you want a different one you can use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">SHELL</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">/bin/zsh</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">SHELL</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">/bin/zsh</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter test</span>
+</span></code></pre>
+<h2 id="run-the-container-with-real-root">Run the Container with Real Root<a class="zola-anchor" href="#run-the-container-with-real-root" aria-label="Anchor link for: run-the-container-with-real-root"><i class="icon"></i></a>
+</h2>
+<p>When using podman, distrobox will prefer to use rootless containers. In this mode the <code>root</code>
+user inside the container is <strong>not</strong> the real <code>root</code> user of the host. But it still has
+the same privileges as your normal <code>$USER</code>.</p>
+<p>But what if you really really need those <code>root</code> privileges even inside the container?</p>
+<p>Running <code>sudo distrobox</code> is not supported, instead, it is better to simply use normal
+command with the <code>--root</code> or <code>-r</code> flag, so that distrobox can still integrate better
+with your <code>$USER</code>.</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> your-chosen-image:tag<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span></span>
+</span></code></pre>
+<p>Another use case, what if you want or need to run distrobox with the root user, in a login
+shell?</p>
+<p>Before the 1.4.3 release, it wasn’t possible. We couldn’t make a distinction between someone
+running distrobox via <code>sudo</code> from someone logged in as the root user in a shell. Now things are
+as easy as it would be if you were creating a rootless container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> your-container<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>pull</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> your-chosen-image:tag<span class="z-meta z-group z-expansion z-command z-backticks z-shell"><span class="z-punctuation z-section z-group z-begin z-shell">`</span>
+</span></span></span></code></pre>
+<p>And:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox enter your-container<span class="z-meta z-group z-expansion z-command z-backticks z-shell"><span class="z-punctuation z-section z-group z-begin z-shell">`</span>
+</span></span></span></code></pre>
+<p>We trust you already know the implications of running distrobox, as well as anything else,
+with the root user and that with great power comes great responsibilities.</p>
+<h2 id="run-debian-ubuntu-container-behind-proxy">Run Debian/ubuntu Container behind Proxy<a class="zola-anchor" href="#run-debian-ubuntu-container-behind-proxy" aria-label="Anchor link for: run-debian-ubuntu-container-behind-proxy"><i class="icon"></i></a>
+</h2>
+<p>It might be that you’re trying to set-up your distrobox, but you’re stuck behind a proxy.
+A simple solution can be crafted using <code>pre-init-hooks</code></p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">proxy</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">http://my_proxy.domain.example:3128</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">t</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>echo &#39;Acquire::http::Proxy <span class="z-constant z-character z-escape z-shell">\\</span><span class="z-constant z-character z-escape z-shell">\&quot;</span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">proxy</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-constant z-character z-escape z-shell">\\</span><span class="z-constant z-character z-escape z-shell">\&quot;</span>;&#39; &gt; /etc/apt/apt.conf.d/proxy.conf; echo &#39;Acquire::https::Proxy <span class="z-constant z-character z-escape z-shell">\\</span><span class="z-constant z-character z-escape z-shell">\&quot;</span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">proxy</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-constant z-character z-escape z-shell">\\</span><span class="z-constant z-character z-escape z-shell">\&quot;</span>;&#39; &gt;&gt; /etc/apt/apt.conf.d/proxy.conf;<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">http_proxy</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">proxy</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> debian<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> deb<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>pre-init-hooks</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">t</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<p>This way, we’re configuring <code>apt</code> before using it.</p>
+<h2 id="using-a-command-other-than-sudo-to-run-a-rootful-container">Using a Command Other than Sudo to Run a Rootful Container<a class="zola-anchor" href="#using-a-command-other-than-sudo-to-run-a-rootful-container" aria-label="Anchor link for: using-a-command-other-than-sudo-to-run-a-rootful-container"><i class="icon"></i></a>
+</h2>
+<p>When using the <code>--root</code> option with Distrobox, internally, it uses <code>sudo</code> to be able to
+interact with the rootful container through podman/docker, which will prompt for a valid
+root password on the terminal. However, some users might prefer to use a command other
+than <code>sudo</code> in order to authenticate as root; for example, <code>pkexec</code> could be used to
+display a graphical authentication prompt. If you need this, make sure to specify
+the desired command through the <code>DBX_SUDO_PROGRAM</code> environment variable
+(supported by most <code>distrobox</code> subcommands), alongside <code>--root</code>. Sample usage:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">DBX_SUDO_PROGRAM</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>pkexec<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> your-chosen-image:tag<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span></span>
+</span></code></pre>
+<p>Additionally, you may also have any further distrobox commands use <code>pkexec</code> (for example)
+for rootful containers by appending the line <code>distrobox_sudo_program="pkexec"</code>
+(replace <code>pkexec</code> with the desired program) to one of the config file paths that
+distrobox supports; for example, to ‘~/.distroboxrc’.</p>
+<p>It is also worth noting that, if your sudo program does not have persistence
+(i.e., cooldown before asking for the root password again after a successful authentication)
+configured, then you may have to enter the root password multiple times, as distrobox
+calls multiple podman/docker commands under the hood. In order to avoid this, it is
+recommended to either configure your sudo program to be persistent, or, if that’s
+not feasible, use <code>sudo</code> whenever possible (which has persistence enabled by default).</p>
+<p>However, if you’d like to have a graphical authentication prompt, but would also like
+to benefit from <code>sudo</code>’s persistence (to avoid prompting for a password multiple times in a row),
+you may specify <code>sudo --askpass</code> as the sudo program.
+The <code>--askpass</code> option makes sudo launch the program in the path (or name, if it is in <code>$PATH</code>)
+specified by the <code>SUDO_ASKPASS</code> environment variable, and uses its output (to stdout)
+as the password input to authenticate as root. If unsuccessful, it launches the program again,
+until either it outputs the correct password, the user cancels the operation, or
+a limit of amount of authentication attempts is reached.</p>
+<p>So, for example, assume you’d like to use <code>zenity --password</code> to prompt for the sudo password.
+You may save a script, e.g. <code>my-password-prompt</code>, to somewhere in your machine - say,
+to <code>~/.local/bin/my-password-prompt</code> - with the following contents:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-comment z-line z-number-sign z-shell"><span class="z-punctuation z-definition z-comment z-begin z-shell">#</span></span><span class="z-comment z-line z-number-sign z-shell">!/bin/sh</span><span class="z-comment z-line z-number-sign z-shell">
+</span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">zenity</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>password</span></span>
+</span></code></pre>
+<p>Make it executable using, for example, <code>chmod</code> (in the example, by running <code>chmod +x ~/.local/bin/my-password-prompt</code> -
+replace with the path to your script). Afterwards, make sure <code>SUDO_ASKPASS</code> is set to your newly-created script’s path,
+and also ensure <code>DBX_SUDO_PROGRAM</code> is set to <code>sudo --askpass</code>, and you should be good to go. For example,
+running the below command should only prompt the root authentication GUI once throughout the whole process:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">SUDO_ASKPASS</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">HOME</span></span>/.local/bin/my-password-prompt<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-variable z-other z-readwrite z-assignment z-shell">DBX_SUDO_PROGRAM</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>sudo --askpass<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox-ephemeral</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>r</span></span>
+</span></code></pre>
+<p>You may make these options persist by specifying those environment variables in your shell’s rc file (such as <code>~/.bashrc</code>).
+Note that this will also work if <code>distrobox_sudo_program="sudo --askpass"</code> is specified in one of distrobox’s config files
+(such as <code>~/.distroboxrc</code>), alongside <code>export SUDO_ASKPASS="/path/to/password/prompt/program"</code> (for example - however, this
+last line is usually better suited to your shell’s rc file).</p>
+<h2 id="duplicate-an-existing-distrobox">Duplicate an Existing Distrobox<a class="zola-anchor" href="#duplicate-an-existing-distrobox" aria-label="Anchor link for: duplicate-an-existing-distrobox"><i class="icon"></i></a>
+</h2>
+<p>It can be useful to just duplicate an already set up environment, to do this,
+<code>distrobox create</code> supports the use of the
+<code>--clone</code> flag, as specified in the usage <a href="https://daudix.github.io/distrobox/usage/distrobox-create/">HERE</a></p>
+<p>Simply use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>clone</span> name-of-distrobox-to-clone</span>
+</span></code></pre>
+<h2 id="export-to-the-host">Export to the Host<a class="zola-anchor" href="#export-to-the-host" aria-label="Anchor link for: export-to-the-host"><i class="icon"></i></a>
+</h2>
+<p>Distrobox supports exporting to the host either binaries or applications.
+<a href="https://daudix.github.io/distrobox/usage/distrobox-export/">Head over the usage page to have an explanation and examples.</a></p>
+<h2 id="execute-commands-on-the-host">Execute Commands on the Host<a class="zola-anchor" href="#execute-commands-on-the-host" aria-label="Anchor link for: execute-commands-on-the-host"><i class="icon"></i></a>
+</h2>
+<p>You can check this little post about <a href="https://daudix.github.io/distrobox/posts/execute-commands-on-host/">executing commands on the host.</a></p>
+<h2 id="resolve-error-cannot-open-display-0">Resolve “Error cannot open display: :0”<a class="zola-anchor" href="#resolve-error-cannot-open-display-0" aria-label="Anchor link for: resolve-error-cannot-open-display-0"><i class="icon"></i></a>
+</h2>
+<p>If your container is not able to connect to your host xserver, make sure to
+install <code>xhost</code> on the host machine and run <code>xhost +si:localuser:$USER</code>.
+If you wish to enable this functionality on future reboots add the above command
+to your <code>~/.distroboxrc</code></p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">-$</span></span><span class="z-meta z-function-call z-arguments z-shell"> cat <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.distroboxrc</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">xhost</span></span><span class="z-meta z-function-call z-arguments z-shell"> +si:localuser:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span> <span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span>/dev/null</span>
+</span></code></pre>
+<h2 id="using-init-system-inside-a-distrobox">Using Init System inside a Distrobox<a class="zola-anchor" href="#using-init-system-inside-a-distrobox" aria-label="Anchor link for: using-init-system-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>You can use an init system inside the container. You can either use supported
+pre-created images, or have to add additional packages.</p>
+<p>Example of such images are:</p>
+<ul>
+<li>docker.io/almalinux/8-init</li>
+<li>registry.access.redhat.com/ubi7/ubi-init</li>
+<li>registry.access.redhat.com/ubi8/ubi-init</li>
+<li>registry.access.redhat.com/ubi9/ubi-init</li>
+<li>registry.opensuse.org/opensuse/leap:latest</li>
+<li>registry.opensuse.org/opensuse/tumbleweed:latest</li>
+</ul>
+<p>You can use such feature using:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> docker.io/almalinux/8-init<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test</span>
+</span></code></pre>
+<p>If you want to use a non-pre-create image, you’ll need to add the additional package:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> alpine:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>openrc<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> debian:stable<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd libpam-systemd pipewire-audio-client-libraries<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> ubuntu:22.04<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd libpam-systemd pipewire-audio-client-libraries<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> archlinux:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> registry.opensuse.org/opensuse/tumbleweed:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> registry.fedoraproject.org/fedora:39<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span></code></pre>
+<p>Note however that in this mode, you’ll not be able to access host’s processes
+from within the container.</p>
+<p>Result:</p>
+<p>Systemd running on openSUSE
+<img src="https://github.com/89luca89/distrobox/assets/598882/aa70ce88-2ca6-4266-b530-f51956bd4a0a" alt="image" /></p>
+<p>OpenRC running on Alpine Linux
+<img src="https://github.com/89luca89/distrobox/assets/598882/eb6226d5-6992-47d8-a42b-f3e90e5809d2" alt="image" /></p>
+<p>Example use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> docker.io/almalinux/8-init<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test</span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@test:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo systemctl enable<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>now</span> sshd</span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@test:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo systemctl status sshd</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">●</span></span><span class="z-meta z-function-call z-arguments z-shell"> sshd.service - OpenSSH server daemon</span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Loaded:</span></span><span class="z-meta z-function-call z-arguments z-shell"> loaded (sshd.service</span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">enabled</span></span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">vendor</span></span><span class="z-meta z-function-call z-arguments z-shell"> preset: enabled</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Active:</span></span><span class="z-meta z-function-call z-arguments z-shell"> active (running</span><span class="z-meta z-function-call z-shell"></span>) <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">since</span></span><span class="z-meta z-function-call z-arguments z-shell"> Fri 2022-01-28 22:54:50 CET</span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">17s</span></span><span class="z-meta z-function-call z-arguments z-shell"> ago</span>
+</span><span class="z-source z-shell z-bash">         <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Docs:</span></span><span class="z-meta z-function-call z-arguments z-shell"> man:sshd(8</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash">               <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">man:sshd_config</span></span><span class="z-meta z-function-call z-arguments z-shell">(5</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash">     <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Main</span></span><span class="z-meta z-function-call z-arguments z-shell"> PID: 291 (sshd</span><span class="z-meta z-function-call z-shell"></span>)
+</span></code></pre>
+<h2 id="using-docker-inside-a-distrobox">Using Docker inside a Distrobox<a class="zola-anchor" href="#using-docker-inside-a-distrobox" aria-label="Anchor link for: using-docker-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>You may want to run a separate instance of docker inside your container.
+In order to do this, create a <a href="https://daudix.github.io/distrobox/useful-tips/#using-init-system-inside-a-distrobox">container with an init system</a>
+<strong>using a podman rootful container or using docker</strong> using the <strong>unshare-all flag</strong></p>
+<p>Example:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>image</span> registry.opensuse.org/opensuse/distrobox:latest <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd docker<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>init</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>unshare-all</span></span>
+</span></code></pre>
+<p>Inside the container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo systemctl enable<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>now</span> docker</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo systemctl status docker</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">●</span></span><span class="z-meta z-function-call z-arguments z-shell"> docker.service - Docker Application Container Engine</span>
+</span><span class="z-source z-shell z-bash">     <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Loaded:</span></span><span class="z-meta z-function-call z-arguments z-shell"> loaded (/usr/lib/systemd/system/docker.service</span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">enabled</span></span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">preset:</span></span><span class="z-meta z-function-call z-arguments z-shell"> disabled</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash">     <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Active:</span></span><span class="z-meta z-function-call z-arguments z-shell"> active (running</span><span class="z-meta z-function-call z-shell"></span>) <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">since</span></span><span class="z-meta z-function-call z-arguments z-shell"> Sat 2023-08-26 19:21:34 UTC</span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">3min</span></span><span class="z-meta z-function-call z-arguments z-shell"> 47s ago</span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Docs:</span></span><span class="z-meta z-function-call z-arguments z-shell"> http://docs.docker.com</span>
+</span><span class="z-source z-shell z-bash">   <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Main</span></span><span class="z-meta z-function-call z-arguments z-shell"> PID: 1924 (dockerd</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash">        <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">CPU:</span></span><span class="z-meta z-function-call z-arguments z-shell"> 1.268s</span>
+</span><span class="z-source z-shell z-bash">     <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">CGroup:</span></span><span class="z-meta z-function-call z-arguments z-shell"> /system.slice/docker-b63c525a32a313837146cfb00ed09c151eabd3137ad62779f47d3924c92f7b16.scope/system.slice/docker.service</span>
+</span><span class="z-source z-shell z-bash">             <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">├─1924</span></span><span class="z-meta z-function-call z-arguments z-shell"> /usr/bin/dockerd<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>add-runtime</span> oci=/usr/sbin/docker-runc</span>
+</span><span class="z-source z-shell z-bash">             <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">└─1942</span></span><span class="z-meta z-function-call z-arguments z-shell"> containerd<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>config</span> /var/run/docker/containerd/containerd.toml<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>log-level</span> warn</span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:21:31 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1924<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:21:31.188589166Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=error msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>failed to mount overlay: invalid argument<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> storage-driver=overlay2</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:21:31 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1924<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:21:31.391206840Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=warning msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>WARNING: No swap limit support<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:22:54 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:22:54.385157019Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=info msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>loading plugin <span class="z-constant z-character z-escape z-shell">\&quot;</span>io.containerd.event.v1.publisher<span class="z-constant z-character z-escape z-shell">\&quot;</span>...<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> runtime=io.containerd.runc.v2 type=io.containerd.event.v1</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:22:54 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:22:54.385241039Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=info msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>loading plugin <span class="z-constant z-character z-escape z-shell">\&quot;</span>io.containerd.internal.v1.shutdown<span class="z-constant z-character z-escape z-shell">\&quot;</span>...<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> runtime=io.containerd.runc.v2 type=io.containerd.internal.v1</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:22:54 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:22:54.385250887Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=info msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>loading plugin <span class="z-constant z-character z-escape z-shell">\&quot;</span>io.containerd.ttrpc.v1.task<span class="z-constant z-character z-escape z-shell">\&quot;</span>...<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> runtime=io.containerd.runc.v2 type=io.containerd.ttrpc.v1</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:22:54 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:22:54.385411802Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=info msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>starting signal loop<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> namespace=moby path=/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/bd4cb19537b4c39131b084e<span class="z-constant z-numeric z-integer z-decimal z-file-descriptor z-shell">04</span><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span>
+</span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:23:16 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:23:16.575589748Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=error msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>failed to enable controllers ([cpuset cpu io memory hugetlb pids rdma misc])<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> error=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>failed to write subtree controllers [cpuset cp&gt;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-quoted z-double z-shell">Aug 26 19:23:16 tumbleweed.localhost dockerd[1942]: time=<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span>2023-08-26T19:23:16.575764283Z<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span> level=warning msg=<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span>error from <span class="z-keyword z-operator z-regexp z-quantifier z-shell">*</span>cgroupsv2.Manager.EventChan<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span> error=<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span>failed to add inotify watch for <span class="z-constant z-character z-escape z-shell">\&quot;</span>/sys/fs/cgroup/system.slice/docker-b63c525a32a<span class="z-constant z-numeric z-integer z-decimal z-file-descriptor z-shell">3</span><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span>
+</span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:23:44 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:23:44.744144975Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=warning msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>cleaning up after shim disconnected<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> id=bd4cb19537b4c39131b084e04c354712bac71c6d1ced33d6d1d6933ada0507cc namespace=moby</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Aug</span></span><span class="z-meta z-function-call z-arguments z-shell"> 26 19:23:44 tumbleweed.localhost dockerd<span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>1942<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span>: time=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>2023-08-26T19:23:44.754027382Z<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> level=warning msg=<span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>cleanup warnings time=<span class="z-constant z-character z-escape z-shell">\&quot;</span>2023-08-26T19:23:44Z<span class="z-constant z-character z-escape z-shell">\&quot;</span> level=info msg=<span class="z-constant z-character z-escape z-shell">\&quot;</span>starting signal loop<span class="z-constant z-character z-escape z-shell">\&quot;</span> namespace=moby pid=2221 runtime=io.contain&gt;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-quoted z-double z-shell">luca-linux@tumbleweed:~$ sudo docker run --rm -ti alpine
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-quoted z-double z-shell">~#
+</span></span></span></code></pre>
+<h2 id="using-podman-inside-a-distrobox">Using Podman inside a Distrobox<a class="zola-anchor" href="#using-podman-inside-a-distrobox" aria-label="Anchor link for: using-podman-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>You may want to run a separate instance of podman inside your container.
+In order to do this, create a container using the <strong>unshare-all flag</strong>, the
+container manager can be anyone of choice.</p>
+<p>Example:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>image</span> registry.opensuse.org/opensuse/distrobox:latest <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>podman crun<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>unshare-all</span></span>
+</span></code></pre>
+<p>Inside it install podman, and add subuids for the user:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> usermod<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>add-subuids</span> 10000-65536 <span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> usermod<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>add-subgids</span> 10000-65536 <span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">cat</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-string z-unquoted z-heredoc z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&lt;&lt;</span> <span class="z-keyword z-control z-heredoc-token z-shell">EOF</span></span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> tee /etc/containers/containers.conf</span><span class="z-string z-unquoted z-heredoc z-shell">
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">[containers]
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">netns=&quot;host&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">userns=&quot;host&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">ipcns=&quot;host&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">utsns=&quot;host&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">cgroupns=&quot;host&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">log_driver = &quot;k8s-file&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">[engine]
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">cgroup_manager = &quot;cgroupfs&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell">events_logger=&quot;file&quot;
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-string z-unquoted z-heredoc z-shell"><span class="z-keyword z-control z-heredoc-token z-shell">EOF</span></span></span>
+</span></code></pre>
+<p>Then you’ll be able to use both rootful and rootless podman inside the container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> podman run<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>rm</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>ti</span> alpine</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo podman run<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>rm</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>ti</span> alpine</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span>
+</span></code></pre>
+<h2 id="using-lxc-inside-a-distrobox">Using LXC inside a Distrobox<a class="zola-anchor" href="#using-lxc-inside-a-distrobox" aria-label="Anchor link for: using-lxc-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>You may want to run an LXC instance inside your container.
+In order to do this, create a <a href="https://daudix.github.io/distrobox/useful-tips/#using-init-system-inside-a-distrobox">container with an init system</a>
+using the <strong>unshare-all flag</strong>, this works with either docker, rootful podman, or rootless podman.</p>
+<p>Example:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>image</span> registry.opensuse.org/opensuse/distrobox:latest <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd lxc<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>init</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>unshare-all</span></span>
+</span></code></pre>
+<p>Inside the container we will need to first setup the lxcbr0 network and enable the services:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo systemctl enable<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>now</span> lxc-monitord.service lxc-net.service lxc.service lxcfs.service</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Created</span></span><span class="z-meta z-function-call z-arguments z-shell"> symlink /etc/systemd/system/multi-user.target.wants/lxc-monitord.service → /usr/lib/systemd/system/lxc-monitord.service.</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Created</span></span><span class="z-meta z-function-call z-arguments z-shell"> symlink /etc/systemd/system/multi-user.target.wants/lxc-net.service → /usr/lib/systemd/system/lxc-net.service.</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Created</span></span><span class="z-meta z-function-call z-arguments z-shell"> symlink /etc/systemd/system/multi-user.target.wants/lxc.service → /usr/lib/systemd/system/lxc.service.</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Created</span></span><span class="z-meta z-function-call z-arguments z-shell"> symlink /etc/systemd/system/multi-user.target.wants/lxcfs.service → /usr/lib/systemd/system/lxcfs.service.</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> ip a</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">1:</span></span><span class="z-meta z-function-call z-arguments z-shell"> lo: <span class="z-keyword z-operator z-assignment z-redirection z-shell">&lt;</span>LOOPBACK,UP,LOWER_UP<span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">link/loopback</span></span><span class="z-meta z-function-call z-arguments z-shell"> 00:00:00:00:00:00 brd 00:00:00:00:00:00</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">inet</span></span><span class="z-meta z-function-call z-arguments z-shell"> 127.0.0.1/8 scope host lo</span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">valid_lft</span></span><span class="z-meta z-function-call z-arguments z-shell"> forever preferred_lft forever</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">inet6</span></span><span class="z-meta z-function-call z-arguments z-shell"> ::1/128 scope host proto kernel_lo </span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">valid_lft</span></span><span class="z-meta z-function-call z-arguments z-shell"> forever preferred_lft forever</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">2:</span></span><span class="z-meta z-function-call z-arguments z-shell"> tap0: <span class="z-keyword z-operator z-assignment z-redirection z-shell">&lt;</span>BROADCAST,UP,LOWER_UP<span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> mtu 65520 qdisc fq_codel state UNKNOWN group default qlen 1000</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">link/ether</span></span><span class="z-meta z-function-call z-arguments z-shell"> 02:81:bf:43:1e:65 brd ff:ff:ff:ff:ff:ff</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">inet</span></span><span class="z-meta z-function-call z-arguments z-shell"> 10.0.2.100/24 brd 10.0.2.255 scope global tap0</span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">valid_lft</span></span><span class="z-meta z-function-call z-arguments z-shell"> forever preferred_lft forever</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">inet6</span></span><span class="z-meta z-function-call z-arguments z-shell"> fd00::81:bfff:fe43:1e65/64 scope global dynamic mngtmpaddr proto kernel_ra </span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">valid_lft</span></span><span class="z-meta z-function-call z-arguments z-shell"> 86309sec preferred_lft 14309sec</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">inet6</span></span><span class="z-meta z-function-call z-arguments z-shell"> fe80::81:bfff:fe43:1e65/64 scope link proto kernel_ll </span>
+</span><span class="z-source z-shell z-bash">       <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">valid_lft</span></span><span class="z-meta z-function-call z-arguments z-shell"> forever preferred_lft forever</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo ip link add name lxcbr0 type bridge</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo ip link set dev lxcbr0 up</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo ip link set tap0 master lxcbr0</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo ip address add 10.0.2.100/24 dev lxcbr0</span>
+</span></code></pre>
+<p>Then we can proceed with the LXC container creation:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo lxc-create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test-nested-lxc<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>t</span> download</span>
+</span><span class="z-source z-shell z-bash"><span class="z-support z-function z-test z-begin z-shell">[</span><span class="z-meta z-function-call z-arguments z-shell"> ... <span class="z-support z-function z-test z-end z-shell">]</span></span> <span class="z-comment z-line z-number-sign z-shell"><span class="z-punctuation z-definition z-comment z-begin z-shell">#</span></span><span class="z-comment z-line z-number-sign z-shell"> Here do the interactive rootfs choice, I&#39;ll use alpine:edge amd64</span><span class="z-comment z-line z-number-sign z-shell">
+</span></span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Downloading</span></span><span class="z-meta z-function-call z-arguments z-shell"> the image index</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Downloading</span></span><span class="z-meta z-function-call z-arguments z-shell"> the rootfs</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Downloading</span></span><span class="z-meta z-function-call z-arguments z-shell"> the metadata</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">The</span></span><span class="z-meta z-function-call z-arguments z-shell"> image cache is now ready</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Unpacking</span></span><span class="z-meta z-function-call z-arguments z-shell"> the rootfs</span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">---</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">You</span></span><span class="z-meta z-function-call z-arguments z-shell"> just created an Alpinelinux edge x86_64 (20230826_13:00</span><span class="z-meta z-function-call z-shell"></span>) <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">container.</span></span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo lxc-start test-nested-lxc</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">luca-linux@tumbleweed:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span></span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> sudo lxc-attach test-nested-lxc</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span><span class="z-meta z-function-call z-arguments z-shell"> ps aux</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">PID</span></span><span class="z-meta z-function-call z-arguments z-shell">   USER     TIME  COMMAND</span>
+</span><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">1</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /sbin/init</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">266</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /sbin/syslogd<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>t</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span></span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">273</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /sbin/openrc default</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">293</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /usr/sbin/crond<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>c</span> /etc/crontabs<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>f</span></span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">300</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 <span class="z-meta z-group z-expansion z-brace z-shell"><span class="z-punctuation z-section z-expansion z-brace z-begin z-shell">{</span>networking<span class="z-punctuation z-section z-expansion z-brace z-end z-shell">}</span></span> /sbin/openrc-run /etc/init.d/networking<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>lockfd</span> 4 start</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">301</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 <span class="z-meta z-group z-expansion z-brace z-shell"><span class="z-punctuation z-section z-expansion z-brace z-begin z-shell">{</span>openrc-run.sh<span class="z-punctuation z-section z-expansion z-brace z-end z-shell">}</span></span> /bin/sh /lib/rc/sh/openrc-run.sh /etc/init.d/networking start</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">347</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 ifup<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> /etc/network/interfaces eth0</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">367</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 <span class="z-meta z-group z-expansion z-brace z-shell"><span class="z-punctuation z-section z-expansion z-brace z-begin z-shell">{</span>dhcp<span class="z-punctuation z-section z-expansion z-brace z-end z-shell">}</span></span> /bin/sh /usr/libexec/ifupdown-ng/dhcp</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">372</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /sbin/udhcpc<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>b</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>R</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>p</span> /var/run/udhcpc.eth0.pid<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> eth0<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>x</span> hostname:test-nested-lxc</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">375</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 /bin/ash</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">376</span></span><span class="z-meta z-function-call z-arguments z-shell"> root      0:00 ps aux</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>#</span></span>
+</span></code></pre>
+<p>And you have a working LXC inside your Distrobox container.</p>
+<h2 id="using-waydroid-inside-a-distrobox">Using Waydroid inside a Distrobox<a class="zola-anchor" href="#using-waydroid-inside-a-distrobox" aria-label="Anchor link for: using-waydroid-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>Waydroid is a popular solution for running Android applications on Linux using an LXC container.
+Since these containers run inside a Distrobox, you can also run Waydroid.</p>
+<blockquote>
+<p><strong>Note</strong>: Wayland and the <code>binder_linux</code> module are required at the host level. You can install
+the DKMS from the <a href="https://github.com/choff/anbox-modules">choff/anbox-modules</a> repository.</p>
+</blockquote>
+<h3 id="manual-installation">Manual Installation<a class="zola-anchor" href="#manual-installation" aria-label="Anchor link for: manual-installation"><i class="icon"></i></a>
+</h3>
+<p>To do this, we need a rootful container <a href="https://daudix.github.io/distrobox/useful-tips/#using-init-system-inside-a-distrobox">with Systemd</a> plus
+some additional dependencies (tested with Vanilla OS Pico and Debian Sid):</p>
+<ul>
+<li>libpam-systemd</li>
+<li>curl</li>
+<li>kmod</li>
+<li>dbus-x11</li>
+<li>iptables</li>
+<li>mutter</li>
+</ul>
+<p>Let’s create a rootful and unshared container as follows:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>image</span> ghcr.io/vanilla-os/pico:main <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd libpam-systemd curl kmod dbus-x11 iptables mutter<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>init</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>unshare-all</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>name</span> waydroid</span>
+</span></code></pre>
+<p>Once it’s started with <code>distrobox enter --root waydroid</code>, we can proceed with the Waydroid
+installation from the official repository:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>progress-bar</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>proto</span> <span class="z-string z-quoted z-single z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&#39;</span>=https<span class="z-punctuation z-definition z-string z-end z-shell">&#39;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>tlsv1</span>.2<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>Sf</span> https://repo.waydro.id/waydroid.gpg<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>output</span> /usr/share/keyrings/waydroid.gpg</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-support z-function z-echo z-shell">echo</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>deb [signed-by=/usr/share/keyrings/waydroid.gpg] https://repo.waydro.id/ bookworm main<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">tee</span></span><span class="z-meta z-function-call z-arguments z-shell"> /etc/apt/sources.list.d/waydroid.list</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> apt update</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> apt install waydroid</span>
+</span></code></pre>
+<p>Then proceed with its initialization using:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-storage z-modifier z-shell">export</span> <span class="z-variable z-other z-readwrite z-assignment z-shell">XDG_RUNTIME_DIR</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>/run/host/<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">XDG_RUNTIME_DIR</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-storage z-modifier z-shell">export</span> <span class="z-variable z-other z-readwrite z-assignment z-shell">DBUS_SESSION_BUS_ADDRESS</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell"><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>unix:path=/run/host/<span class="z-meta z-group z-expansion z-command z-parens z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-parens z-begin z-shell">(</span><span class="z-meta z-function-call z-shell"><span class="z-support z-function z-echo z-shell">echo</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-expansion z-parameter z-begin z-shell">{</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-variable z-other z-readwrite z-shell">DBUS_SESSION_BUS_ADDRESS</span></span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-section z-expansion z-parameter z-end z-shell">}</span></span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">cut</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>d</span> <span class="z-string z-quoted z-single z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&#39;</span>=<span class="z-punctuation z-definition z-string z-end z-shell">&#39;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>f2-</span></span><span class="z-punctuation z-section z-parens z-end z-shell">)</span></span><span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span></span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">waydroid</span></span><span class="z-meta z-function-call z-arguments z-shell"> init</span>
+</span></code></pre>
+<p>The above environment variables must be present each time the <code>waydroid</code> command is used.</p>
+<h3 id="automated-installation">Automated Installation<a class="zola-anchor" href="#automated-installation" aria-label="Anchor link for: automated-installation"><i class="icon"></i></a>
+</h3>
+<p>The <a href="https://github.com/Vanilla-OS/waydroid-image/blob/main/recipe.yml">Waydroid image</a> from
+the Vanilla OS Team is designed to streamline the entire setup process. To use it, proceed as follows:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>image</span> ghcr.io/vanilla-os/waydroid:main <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>init</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>unshare-all</span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">  --</span>name</span> waydroid</span>
+</span><span class="z-source z-shell z-bash">
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>root</span> waydroid</span>
+</span></code></pre>
+<p>Once started, Waydroid is automatically executed via Systemd. Check for the process to finish using
+the <code>systemctl status waydroid-init</code> command, then start using Waydroid with:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">ewaydroid</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>help</span></span>
+</span></code></pre>
+<p>Make sure to use the <code>ewaydroid</code> command each time you need to work with Waydroid. This command is a
+wrapper that sets the proper environment variables to make it work with the host D-Bus.</p>
+<h2 id="using-host-s-podman-or-docker-inside-a-distrobox">Using Host’s Podman or Docker inside a Distrobox<a class="zola-anchor" href="#using-host-s-podman-or-docker-inside-a-distrobox" aria-label="Anchor link for: using-host-s-podman-or-docker-inside-a-distrobox"><i class="icon"></i></a>
+</h2>
+<p>You can easily control host’s instance of docker or podman, using <code>distrobox-host-exec</code>
+You can use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> ln<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> /usr/bin/distrobox-host-exec /usr/local/bin/podman</span>
+</span></code></pre>
+<p>or</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> ln<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> /usr/bin/distrobox-host-exec /usr/local/bin/docker</span>
+</span></code></pre>
+<p>This will create a <code>podman</code> or <code>docker</code> command inside the distrobox that will
+transparently execute the command on the host.</p>
+<h2 id="using-distrobox-as-main-cli">Using Distrobox as Main CLI<a class="zola-anchor" href="#using-distrobox-as-main-cli" aria-label="Anchor link for: using-distrobox-as-main-cli"><i class="icon"></i></a>
+</h2>
+<p>In case you want (like me) to use your container as the main CLI environment,
+it comes handy to use <code>gnome-terminal</code> profiles to create a dedicated setup for it:</p>
+<p><img src="https://user-images.githubusercontent.com/598882/146691460-b8a5bb0a-a83d-4e32-abd0-4a0ff9f50eb7.png#transparent" alt="Screenshot from 2021-12-19 22-29-08" /></p>
+<p>Personally, I just bind <code>Ctrl-Alt-T</code> to the Distrobox profile and <code>Super+Enter</code>
+to the Host profile.</p>
+<p>For other terminals, there are similar features (profiles) or  you can set up a
+dedicated shortcut to launch a terminal directly in the distrobox</p>
+<h2 id="using-a-different-architecture">Using a Different Architecture<a class="zola-anchor" href="#using-a-different-architecture" aria-label="Anchor link for: using-a-different-architecture"><i class="icon"></i></a>
+</h2>
+<p>In case you want to run a container with a different architecture from your host,
+you can leverage the use of <code>qemu</code> and support from podman/docker.</p>
+<p>Install on your host the following dependencies:</p>
+<ul>
+<li>qemu</li>
+<li>qemu-user-static</li>
+<li>binfmt-support</li>
+</ul>
+<p>Then you can easily run the image you like:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> uname<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>m</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">x86_64</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> aarch64/fedora<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> fedora-arm64</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox enter fedora-arm64</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">...</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@fedora-arm64:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> uname<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>m</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">aarch64</span></span>
+</span></code></pre>
+<p><img src="https://user-images.githubusercontent.com/598882/170837120-9170a9fa-6153-4684-a435-d60a0136b563.png" alt="image" /></p>
+<h2 id="using-the-gpu-inside-the-container">Using the GPU inside the Container<a class="zola-anchor" href="#using-the-gpu-inside-the-container" aria-label="Anchor link for: using-the-gpu-inside-the-container"><i class="icon"></i></a>
+</h2>
+<p>For Intel and AMD GPUs, the support is baked in, as the containers will install
+their latest available mesa/dri drivers.</p>
+<p>For NVidia, you can use the <code>--nvidia</code> flag during create, see <a href="https://daudix.github.io/distrobox/usage/distrobox-create/">distrobox-create</a>
+documentation to discover how to use it.</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> distrobox create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>nvidia</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> ubuntu-nvidia<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> ubuntu:latest</span>
+</span></code></pre>
+<h3 id="using-nvidia-container-toolkit">Using nvidia-container-toolkit<a class="zola-anchor" href="#using-nvidia-container-toolkit" aria-label="Anchor link for: using-nvidia-container-toolkit"><i class="icon"></i></a>
+</h3>
+<p>Alternatively from the <code>--nvidia</code> flag, you can use NVidia’s own <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html">nvidia-container-toolkit</a>.
+After following the <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html">official guide to set nvidia-ctk up</a>
+you can use it from distrobox doing:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> example-nvidia-toolkit<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-flags</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=all<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> nvidia/cuda</span>
+</span></code></pre>
+<h2 id="slow-creation-on-podman-and-image-size-getting-bigger-with-distrobox-create">Slow Creation on Podman and Image Size Getting Bigger with Distrobox Create<a class="zola-anchor" href="#slow-creation-on-podman-and-image-size-getting-bigger-with-distrobox-create" aria-label="Anchor link for: slow-creation-on-podman-and-image-size-getting-bigger-with-distrobox-create"><i class="icon"></i></a>
+</h2>
+<p>For rootless podman 3.4.0 and upward, adding this to your <code>~/.config/containers/storage.conf</code>
+file will improve container creation speed and fix issues with images getting
+bigger when using rootless containers.</p>
+<pre data-lang="conf" class="language-conf z-code"><code class="language-conf" data-lang="conf"><span class="z-source z-genconfig"><span class="z-storage z-type z-genconfig">[storage]
+</span></span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">driver</span> <span class="z-keyword z-operator z-genconfig">=</span></span> <span class="z-string z-quoted z-double z-genconfig">&quot;overlay&quot;</span>
+</span><span class="z-source z-genconfig">
+</span><span class="z-source z-genconfig"><span class="z-storage z-type z-genconfig">[storage.options.overlay]
+</span></span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">mount_program</span> <span class="z-keyword z-operator z-genconfig">=</span></span> <span class="z-string z-quoted z-double z-genconfig">&quot;/usr/bin/fuse-overlayfs&quot;</span>
+</span></code></pre>
+<p>Note that this is necessary only on Kernel version older than <code>5.11</code> .
+From version <code>5.11</code> onwards native <code>overlayfs</code> is supported and reports noticeable
+gains in performance as explained <a href="https://www.redhat.com/sysadmin/podman-rootless-overlay">HERE</a></p>
+<h2 id="permission-problems-when-using-virtualbox">Permission Problems When Using VirtualBox<a class="zola-anchor" href="#permission-problems-when-using-virtualbox" aria-label="Anchor link for: permission-problems-when-using-virtualbox"><i class="icon"></i></a>
+</h2>
+<p>If you have VirtualBox installed on your host, you may encounter some permission
+problems using <strong>rootless Podman</strong>:</p>
+<pre data-lang="txt" class="language-txt z-code"><code class="language-txt" data-lang="txt"><span class="z-text z-plain">Error: unable to start container &quot;XYZ&quot;: runc: runc create failed: unable to start container process: error during container init: error mounting &quot;/dev/vboxusb/002/005&quot; to rootfs at &quot;/dev/vboxusb/002/005&quot;: lstat /..../dev/vboxusb/002: permission denied: OCI permission denied
+</span></code></pre>
+<p>This is because a rootless container done with <code>runc</code> will not port the host’s groups
+into the container.</p>
+<p>The solution is to install <code>crun</code> from your package manager, and recreate your container.</p>
+<p>crun supports the flag</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">run.oci.keep_original_groups</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">1</span>
+</span></code></pre>
+<p>Which will allow porting the host’s group inside the container, thus making it possible
+for the rootless container to read vbox files.</p>
+<h2 id="container-save-and-restore">Container save and Restore<a class="zola-anchor" href="#container-save-and-restore" aria-label="Anchor link for: container-save-and-restore"><i class="icon"></i></a>
+</h2>
+<p>To save, export and reuse an already configured container, you can leverage
+<code>podman save</code> or <code>docker save</code> and <code>podman import</code> or <code>docker import</code> to
+create snapshots of your environment.</p>
+<hr />
+<p>To save a container to an image:</p>
+<p>with podman:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">podman</span></span><span class="z-meta z-function-call z-arguments z-shell"> container commit<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>p</span> distrobox_name image_name_you_choose</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">podman</span></span><span class="z-meta z-function-call z-arguments z-shell"> save image_name_you_choose:latest</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">bzip2</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> image_name_you_choose.tar.bz</span>
+</span></code></pre>
+<p>with docker:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">docker</span></span><span class="z-meta z-function-call z-arguments z-shell"> container commit<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>p</span> distrobox_name image_name_you_choose</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">docker</span></span><span class="z-meta z-function-call z-arguments z-shell"> save image_name_you_choose:latest</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">gzip</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-keyword z-operator z-assignment z-redirection z-shell">&gt;</span> image_name_you_choose.tar.gz</span>
+</span></code></pre>
+<p>This will create a tar.gz of the container of your choice at that exact moment.</p>
+<hr />
+<p>Now you can backup that archive or transfer it to another host, and to restore it
+just run</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">podman</span></span><span class="z-meta z-function-call z-arguments z-shell"> load <span class="z-keyword z-operator z-assignment z-redirection z-shell">&lt;</span> image_name_you_choose.tar.bz2</span>
+</span></code></pre>
+<p>or</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">docker</span></span><span class="z-meta z-function-call z-arguments z-shell"> load <span class="z-keyword z-operator z-assignment z-redirection z-shell">&lt;</span> image_name_you_choose.tar.gz</span>
+</span></code></pre>
+<p>And create a new container based on that image:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> image_name_you_choose:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> distrobox_name</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> distrobox_name</span>
+</span></code></pre>
+<p>And you’re good to go, now you can reproduce your personal environment everywhere
+in simple (and scriptable) steps.</p>
+<h2 id="check-used-resources">Check Used Resources<a class="zola-anchor" href="#check-used-resources" aria-label="Anchor link for: check-used-resources"><i class="icon"></i></a>
+</h2>
+<ul>
+<li>You can always check how much space a <code>distrobox</code> is taking by using <code>podman</code> command:</li>
+</ul>
+<p><code>podman system df -v</code> or <code>docker system df -v</code></p>
+<h2 id="pre-installing-additional-package-repositories">Pre-Installing Additional Package Repositories<a class="zola-anchor" href="#pre-installing-additional-package-repositories" aria-label="Anchor link for: pre-installing-additional-package-repositories"><i class="icon"></i></a>
+</h2>
+<p>On Red Hat Enterprise Linux and its derivatives, the amount of packages in the
+base repositories is limited, and additional packages need to be brought in by
+enabling additional repositories such as <a href="https://docs.fedoraproject.org/en-US/epel/">EPEL</a>.</p>
+<p>You can use <code>--init-hooks</code> to automate this, but this does not solve the
+issue for package installations done during initialization itself, e.g. if
+the shell you use on the host is not available in the default repos (e.g.
+<code>fish</code>).</p>
+<p>Use the pre-initialization hooks for this:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> docker.io/almalinux/8-init<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>pre-init-hooks</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>dnf -y install dnf-plugins-core &amp;&amp; dnf config-manager --enable powertools &amp;&amp; dnf -y install epel-release<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> docker.io/library/almalinux:9<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> alma9<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>pre-init-hooks</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>dnf -y install dnf-plugins-core &amp;&amp; dnf config-manager --enable crb &amp;&amp; dnf -y install epel-release<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> quay.io/centos/centos:stream9 c9s<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>pre-init-hooks</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>dnf -y install dnf-plugins-core &amp;&amp; dnf config-manager --enable crb &amp;&amp; dnf -y install epel-next-release<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<h2 id="apply-resource-limitation-on-the-fly">Apply Resource Limitation on the Fly<a class="zola-anchor" href="#apply-resource-limitation-on-the-fly" aria-label="Anchor link for: apply-resource-limitation-on-the-fly"><i class="icon"></i></a>
+</h2>
+<p>Podman has <code>--cpuset-cpus</code> and <code>--memory</code> flags to apply limitation on how much resources a container can use. However,
+these flags only work during container creation (<code>podman create</code> / <code>podman run</code>) and not after it’s created
+(<code>podman exec</code>, which is used by Distrobox to execute commands inside of container), which means changing resource
+limitation requires recreation of a container.</p>
+<p>Nonetheless you can still apply resource limitation using systemd’s resource control functionality. It’s not recommended
+to pass resource limitation arguments (e.g. <code>--cpuset-cpus</code> and <code>--memory</code>) to <code>distrobox create --additional-flags</code>
+as systemd already provides much more flexible resource control functionality.</p>
+<p>To list all distroboxes and their full IDs:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">podman</span></span><span class="z-meta z-function-call z-arguments z-shell"> ps<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>all</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>no-trunc</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>format</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>{{.Names}} {{.ID}} {{.Labels}}<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">grep</span></span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>manager:distrobox<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">cut</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>d</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span> <span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>f1</span>,2</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">column</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>t</span></span>
+</span></code></pre>
+<ul>
+<li>Removing <code>--all</code> flag will cause the output to only contain currently running distroboxes</li>
+</ul>
+<p>To check your container status with <code>systemctl</code>:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> status libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope</span>
+</span></code></pre>
+<ul>
+<li>
+<p>Your distrobox needs to be running for its scope to present (e.g. <code>distrobox enter</code> before running this command)</p>
+</li>
+<li>
+<p>Replace <code>$UUID</code> with your container’s real full ID</p>
+</li>
+<li>
+<p>To make things easier when tweaking properties, optionally set a environment variable for the current shell:</p>
+<p>bash/zsh:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">UUID</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">XXXXXXXXX</span>
+</span></code></pre>
+<p>fish:</p>
+<pre data-lang="fish" class="language-fish z-code"><code class="language-fish" data-lang="fish"><span class="z-source z-shell z-fish"><span class="z-meta z-function-call z-name z-fish"><span class="z-variable z-function z-fish"><span class="z-meta z-string z-unquoted z-fish">set</span></span></span><span class="z-meta z-function-call z-fish"> </span><span class="z-meta z-function-call z-parameter z-argument z-path z-fish"><span class="z-meta z-string z-unquoted z-fish">UUID</span></span><span class="z-meta z-function-call z-fish"> </span><span class="z-meta z-function-call z-parameter z-argument z-path z-fish"><span class="z-meta z-string z-unquoted z-fish">XXXXXXXXX</span></span><span class="z-meta z-function-call z-operator z-control z-fish">
+</span></span></code></pre>
+</li>
+</ul>
+<p>Everything provided by <code>systemd.resource-control</code> could be applied to your distrobox. For example:</p>
+<p>To make your distrobox only run on CPU0 and CPU1:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> set-property libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope AllowedCPUs=0,1</span>
+</span></code></pre>
+<p>To hard throttle your distrobox to not use above 20% of CPU:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> set-property libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope CPUQuota=20<span class="z-meta z-group z-expansion z-job z-shell"><span class="z-punctuation z-definition z-variable z-job z-shell">%</span></span></span>
+</span></code></pre>
+<p>To limit your distrobox’s maximum amount of memory:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> set-property libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope MemoryMax=2G</span>
+</span></code></pre>
+<p>To give your distrobox less IO bandwidth when IO is overloaded:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> set-property libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope IOWeight=1</span>
+</span></code></pre>
+<ul>
+<li><code>IOWeight</code> accepts value from <code>1</code> to <code>10000</code>, higher means more bandwidth.</li>
+</ul>
+<p>To see all applicable properties:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">man</span></span><span class="z-meta z-function-call z-arguments z-shell"> systemd.resource-control</span>
+</span></code></pre>
+<p>Changes are transient, meaning you lose the resource limitation properties when distrobox is stopped and restarted.</p>
+<p>To make certain changes persistent, first check the currently active properties:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> status libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope</span>
+</span></code></pre>
+<p>Look for the <code>Drop-In</code> lines. Something like this should be shown:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash">    <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Drop-In:</span></span><span class="z-meta z-function-call z-arguments z-shell"> /run/user/1000/systemd/transient/libpod-45ae38d61c9a636230b2ba89ea07792d662e01cd9ee38d04feb0a994b039a271.scope.d</span>
+</span><span class="z-source z-shell z-bash">             <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">└─50-AllowedCPUs.conf</span></span>
+</span></code></pre>
+<p>Move the transient overrides to persistent overrides:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">mkdir</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>p</span> <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.config/systemd/user/libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope.d</span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">mv</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>target-directory</span><span class="z-keyword z-operator z-assignment z-option z-shell">=</span><span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span><span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">HOME</span></span>/.config/systemd/user/libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope.d<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span> <span class="z-punctuation z-separator z-continuation z-line z-shell">\
+</span></span></span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-arguments z-shell">  <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>/run/user/<span class="z-meta z-group z-expansion z-command z-parens z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-punctuation z-section z-parens z-begin z-shell">(</span><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">id</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>u</span></span><span class="z-punctuation z-section z-parens z-end z-shell">)</span></span>/systemd/transient/libpod-<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">UUID</span></span>.scope.d/50-AllowedCPUs.conf<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<ul>
+<li>Replace <code>$(id -u)</code> with your real user id if it did not get expanded properly.</li>
+<li><code>50-AllowedCPUs.conf</code> is only an example. Replace it with something you want to keep persistently.</li>
+</ul>
+<p>Then reload systemd daemon to apply the changes:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">systemctl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>user</span> daemon-reload</span>
+</span></code></pre>
+<h2 id="copy-text-to-host-clipboard">Copy Text to Host Clipboard<a class="zola-anchor" href="#copy-text-to-host-clipboard" aria-label="Anchor link for: copy-text-to-host-clipboard"><i class="icon"></i></a>
+</h2>
+<p>To copy/yank text from the container to the host clipboard you need to install
+<code>xsel</code> in the container for Xorg hosts or <code>wlroots</code> for wayland hosts.</p>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

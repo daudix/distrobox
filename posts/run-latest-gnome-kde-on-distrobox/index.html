@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Using a Stable-Release Distribution - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Using a Stable-Release Distribution - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<h1>Using a Stable-Release Distribution</h1><h2>Table of Contents</h2>
+	<ul><li>
+				<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#initializing-the-distrobox">Initializing the Distrobox</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#running-latest-gnome">Running Latest GNOME</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#generate-session-file-gnome">Generate Session File - GNOME</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#running-latest-plasma">Running Latest Plasma</a><ul><li>
+								<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#generate-session-file-plasma">Generate Session File - Plasma</a>
+							</li><li>
+								<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#add-a-couple-of-fixes">Add a Couple of Fixes</a>
+							</li></ul></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#using-other-guis">Using Other GUIs</a></li><li>
+				<a href="https://daudix.github.io/distrobox/posts/run-latest-gnome-kde-on-distrobox/#using-apps-from-host">Using Apps from Host</a></li></ul><blockquote class="
+	
+	
+	
+	warning
+	
+">
+	<p class="alert-title">
+		<i class="icon"></i>Warning</p>
+	<p>THIS IS EXPERIMENTAL, JUST FOOD FOR THOUGHTS.</p>
+<p>BUG REPORTS FOR THIS TYPE OF EXPERIMENTS WILL BE TREATED WITH VERY LOW PRIORITY.</p>
+
+</blockquote>
+<p>Lots of people prefer to run a distribution following a stable-LTS release cycle
+like Debian, UbuntuLTS or CentOS family (Almalinux, Rocky Linux).
+This ensures great stability on one hand, but package staling on the other.</p>
+<p>One way to counter this effect is to use a pet-container managed by Distrobox
+to run packages from much newer distributions without giving up on core base os stability.</p>
+<h2 id="initializing-the-distrobox">Initializing the Distrobox</h2>
+<p>For this experiment we’ll use Fedora Rawhide as our distrobox, and Centos 8 Stream
+as our host, so:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> fedora-rawhide<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> registry.fedoraproject.org/fedora:rawhide</span>
+</span></code></pre>
+<p>and</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter fedora-rawhide</span>
+</span></code></pre>
+<h2 id="running-latest-gnome">Running Latest GNOME</h2>
+<p>First we need to install GNOME in the container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@fedora-rawhide:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo dnf groupinstall GNOME</span>
+</span></code></pre>
+<p>And let’s grab a coffee while it finishes :-)</p>
+<p>After the <code>dnf</code> process finishes, we have GNOME installed in our container,
+now how do we use it?</p>
+<h3 id="generate-session-file-gnome">Generate Session File - GNOME</h3>
+<p>First in the host we need a reliable way to fix the permissions problem of the
+<code>/tmp/.X11-unix</code> directory. This directory should either belong to <code>root</code> or
+<code>$USER</code>. But in a rootless container, host’s <code>root</code> is not mapped inside the
+container so we need to change the ownership from <code>root</code> to <code>$USER</code> each time.</p>
+<p>Let’s add:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chown</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>f</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>R</span> <span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span>:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span> /tmp/.X11-unix</span>
+</span></code></pre>
+<p>to <code>/etc/profile.d/fix_tmp.sh</code> file.</p>
+<p>This is needed for the XWayland session to work properly which right now is
+necessary to run gnome-shell even on wayland.</p>
+<p>Then we need to add a desktop file for the session on the <strong>host’s</strong> file system,
+so that it appears on your login manager (Be it SDDM or GDM)</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">[Desktop</span></span><span class="z-meta z-function-call z-arguments z-shell"> Entry]</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Name</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">GNOME</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">on</span></span><span class="z-meta z-function-call z-arguments z-shell"> Wayland (fedora-rawhide distrobox</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Comment</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">This</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">session</span></span><span class="z-meta z-function-call z-arguments z-shell"> logs you into GNOME</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Exec</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">/usr/local/bin/distrobox-enter</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">-n</span></span><span class="z-meta z-function-call z-arguments z-shell"> fedora-rawhide<span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> /usr/bin/gnome-session</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Type</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">Application</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">DesktopNames</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">GNOME</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">X-GDM-SessionRegisters</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">true</span>
+</span></code></pre>
+<p>This file should be placed under <code>/usr/local/share/wayland-sessions/distrobox-gnome.desktop</code>
+(If it doesn’t show up, you can place it under <code>/usr/share/xsessions/distrobox-gnome.desktop</code>)</p>
+<p>Let’s log out and voilá!</p>
+<p><img src="https://user-images.githubusercontent.com/598882/148703229-82905d23-f3d0-41bc-a048-d12cdf8066d0.png" alt="image" />
+<img src="https://github.com/89luca89/distrobox/assets/598882/9b981f40-fdbe-4ed4-82cc-1e96b6e945e5" alt="Screenshot from 2024-02-21 23-32-13" />
+<img src="https://github.com/89luca89/distrobox/assets/598882/d2200195-74c6-4a1c-8ddb-a9fabe775999" alt="Screenshot from 2024-02-21 23-32-03" /></p>
+<p>We now are in a GNOME 42 session inside Fedora Rawhide while our main OS remains
+Centos.</p>
+<h2 id="running-latest-plasma">Running Latest Plasma</h2>
+<p>We first need to install Plasma in the container:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">user@fedora-rawhide:<span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> sudo dnf groupinstall KDE</span>
+</span></code></pre>
+<h3 id="generate-session-file-plasma">Generate Session File - Plasma</h3>
+<p>We need to add a desktop file for the session on the <strong>host’s</strong> file system,
+so that it appears on your login manager (Be it SSDM or GDM)</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">[Desktop</span></span><span class="z-meta z-function-call z-arguments z-shell"> Entry]</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Exec</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">/usr/local/bin/distrobox-enter</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">--</span></span><span class="z-meta z-function-call z-arguments z-shell"> /usr/libexec/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">DesktopNames</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">KDE</span>
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">Name</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">Plasma</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">on</span></span><span class="z-meta z-function-call z-arguments z-shell"> Wayland (fedora-rawhide distrobox</span><span class="z-meta z-function-call z-shell"></span>)
+</span><span class="z-source z-shell z-bash"><span class="z-variable z-other z-readwrite z-assignment z-shell">X-KDE-PluginInfo-Version</span><span class="z-keyword z-operator z-assignment z-shell">=</span><span class="z-string z-unquoted z-shell">5.23.3</span>
+</span></code></pre>
+<p>This file should be placed under <code>/usr/local/share/wayland-sessions/distrobox-plasma.desktop</code>
+(If it doesn’t show up, you can place it under <code>/usr/share/xsessions/distrobox-plasma.desktop</code>)</p>
+<h3 id="add-a-couple-of-fixes">Add a Couple of Fixes</h3>
+<p>To make Plasma work we need a couple more fixes to run both on the host and in the container.</p>
+<p>First in the host we need a reliable way to fix the permissions problem of the
+<code>/tmp/.X11-unix</code> directory. This directory should either belong to <code>root</code> or
+<code>$USER</code>. But in a rootless container, host’s <code>root</code> is not mapped inside the
+container so we need to change the ownership from <code>root</code> to <code>$USER</code> each time.</p>
+<p>Let’s add:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">chown</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>f</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>R</span> <span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span>:<span class="z-meta z-group z-expansion z-parameter z-shell"><span class="z-punctuation z-definition z-variable z-shell">$</span><span class="z-variable z-other z-readwrite z-shell">USER</span></span> /tmp/.X11-unix</span>
+</span></code></pre>
+<p>to <code>/etc/profile.d/fix_tmp.sh</code> file.</p>
+<p>We also need to add a process in autostart on which Plasma shell relies on a
+process called <code>kactivitymanagerd</code>. Not having host’s systemd at disposal we
+can start it simply adding it to the ~/.profile file, add:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-keyword z-control z-conditional z-if z-shell">if</span> <span class="z-support z-function z-test z-begin z-shell">[</span><span class="z-meta z-function-call z-arguments z-shell"> <span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell">-</span>f</span> /usr/libexec/kactivitymanagerd <span class="z-support z-function z-test z-end z-shell">]</span></span><span class="z-keyword z-operator z-logical z-continue z-shell">;</span> <span class="z-keyword z-control z-conditional z-then z-shell">then</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">/usr/libexec/kactivitymanagerd</span></span> <span class="z-keyword z-operator z-logical z-job z-shell">&amp;</span> <span class="z-meta z-function-call z-shell"><span class="z-support z-function z-disown z-shell">disown</span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-keyword z-control z-conditional z-end z-shell">fi</span>
+</span></code></pre>
+<p>to <code>~/.profile</code> file.</p>
+<p>Let’s log out and voilá!</p>
+<p><img src="https://user-images.githubusercontent.com/598882/148704789-3d799a85-51cc-4de7-9ee3-f54add4949bc.png" alt="image" />
+<img src="https://user-images.githubusercontent.com/598882/148705044-7271af0c-0675-42f8-9f45-ad20ec53deca.png" alt="image" /></p>
+<p>We now are in latest KDE Plasma session inside Fedora Rawhide while our main OS remains
+Centos.</p>
+<h2 id="using-other-guis">Using Other GUIs</h2>
+<p>Thanks to <a href="https://twitter.com/usenetnerd">J.S. Evans</a> he experimented and wrote a beautiful blog post
+on how to use Distrobox for much more than simply running apps.</p>
+<p>You’ll read on how to set up a working Ubuntu container with IceWM running on Xorg using Distrobox:</p>
+<p><a href="https://cloudyday.tech.blog/2022/05/14/distrobox-is-awesome/">Read the Article HERE</a></p>
+<h2 id="using-apps-from-host">Using Apps from Host</h2>
+<p>Now that we’re in a container session, we may want to still use some of the host’s
+apps. Refer to <a href="https://daudix.github.io/distrobox/posts/execute-commands-on-host/">THIS</a> to create handlers and wrappers
+to use the complete selection of host’s apps and binaries inside the container.</p>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>

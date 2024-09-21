@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"  lang="en" >
+<head>
+	<!-- 2024-09-21 Sat 17:48 -->
+	<meta charset="UTF-8" />
+	<meta name="description" content="Use any linux distribution inside your terminal." />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="theme-color" content="#70594d" />
+		<meta name="theme-color" content="#f0e2d1" media="(prefers-color-scheme:dark)" />
+	<title>Home - Distrobox</title>
+	<link rel="canonical" href="https://daudix.github.io/distrobox/" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-light.css" media="(prefers-color-scheme: light)" />
+			<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/syntax-theme-dark.css" media="(prefers-color-scheme: dark)" /><link rel="icon" type="image/png" href="https://daudix.github.io/distrobox/favicon.png" />
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://daudix.github.io/distrobox/apple-touch-icon.png" />
+<style type="text/css">
+	:root {--accent-color: #70594d;--contrast-color: #fff;}[data-theme="dark"] {
+			--accent-color: #f0e2d1;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--accent-color: #f0e2d1;
+			}
+		}[data-theme="dark"] {
+			--contrast-color: rgb(0 0 0 / 0.8);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--contrast-color: rgb(0 0 0 / 0.8);
+			}
+		}</style>
+
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/style.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/fonts.css" />
+		<link type="text/css" rel="stylesheet" href="https://daudix.github.io/distrobox/custom.css" />
+
+<script type="text/javascript">
+	document.addEventListener("DOMContentLoaded", function () {
+		let blocks = document.querySelectorAll("pre[class^='language-']");
+
+		blocks.forEach((block) => {
+			if (navigator.clipboard) {
+				// Code block header title
+				let title = document.createElement("span");
+				let lang = block.getAttribute("data-lang");
+				title.innerHTML = lang;
+
+				// Copy button icon
+				let icon = document.createElement("i");
+				icon.classList.add("icon");
+
+				// Copy button
+				let button = document.createElement("button");
+				button.setAttribute("title", "Copy code")
+				button.appendChild(icon);
+
+				// Code block header
+				let header = document.createElement("div");
+				header.classList.add("header");
+				header.appendChild(button);
+				header.appendChild(title);
+
+				// Container that holds header and the code block itself
+				let container = document.createElement("div");
+				container.classList.add("pre-container");
+				container.appendChild(header);
+
+				// Move code block into the container
+				block.parentNode.insertBefore(container, block);
+				container.appendChild(block);
+
+				button.addEventListener("click", async () => {
+					await copyCode(block, header, button); // Pass the button here
+				});
+			}
+		});
+
+		async function copyCode(block, header, button) {
+			let code = block.querySelector("code");
+			let text = code.innerText;
+
+			await navigator.clipboard.writeText(text);
+
+			header.classList.add("active");
+			button.setAttribute("disabled", true);
+
+			header.addEventListener("animationend", () => {
+				header.classList.remove("active");
+				button.removeAttribute("disabled");
+			}, { once: true });
+		}
+	});
+</script>
+
+
+<script type="text/javascript">
+    function debounce(func, wait) {
+        var timeout;
+
+        return function () {
+            var context = this;
+            var args = arguments;
+            clearTimeout(timeout);
+
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+
+    // Taken from mdbook
+    // The strategy is as follows:
+    // First, assign a value to each word in the document:
+    //  Words that correspond to search terms (stemmer aware): 40
+    //  Normal words: 2
+    //  First word in a sentence: 8
+    // Then use a sliding window with a constant number of words and count the
+    // sum of the values of the words within the window. Then use the window that got the
+    // maximum sum. If there are multiple maximas, then get the last one.
+    // Enclose the terms in <b>.
+    function makeTeaser(body, terms) {
+        var TERM_WEIGHT = 40;
+        var NORMAL_WORD_WEIGHT = 2;
+        var FIRST_WORD_WEIGHT = 8;
+        var TEASER_MAX_WORDS = 30;
+
+        var stemmedTerms = terms.map(function (w) {
+            return elasticlunr.stemmer(w.toLowerCase());
+        });
+        var termFound = false;
+        var index = 0;
+        var weighted = []; // contains elements of ["word", weight, index_in_document]
+
+        // split in sentences, then words
+        var sentences = body.toLowerCase().split(". ");
+
+        for (var i in sentences) {
+            var words = sentences[i].split(" ");
+            var value = FIRST_WORD_WEIGHT;
+
+            for (var j in words) {
+                var word = words[j];
+
+                if (word.length > 0) {
+                    for (var k in stemmedTerms) {
+                        if (elasticlunr.stemmer(word).startsWith(stemmedTerms[k])) {
+                            value = TERM_WEIGHT;
+                            termFound = true;
+                        }
+                    }
+                    weighted.push([word, value, index]);
+                    value = NORMAL_WORD_WEIGHT;
+                }
+
+                index += word.length;
+                index += 1;  // ' ' or '.' if last word in sentence
+            }
+
+            index += 1;  // because we split at a two-char boundary '. '
+        }
+
+        if (weighted.length === 0) {
+            return body;
+        }
+
+        var windowWeights = [];
+        var windowSize = Math.min(weighted.length, TEASER_MAX_WORDS);
+        // We add a window with all the weights first
+        var curSum = 0;
+        for (var i = 0; i < windowSize; i++) {
+            curSum += weighted[i][1];
+        }
+        windowWeights.push(curSum);
+
+        for (var i = 0; i < weighted.length - windowSize; i++) {
+            curSum -= weighted[i][1];
+            curSum += weighted[i + windowSize][1];
+            windowWeights.push(curSum);
+        }
+
+        // If we didn't find the term, just pick the first window
+        var maxSumIndex = 0;
+        if (termFound) {
+            var maxFound = 0;
+            // backwards
+            for (var i = windowWeights.length - 1; i >= 0; i--) {
+                if (windowWeights[i] > maxFound) {
+                    maxFound = windowWeights[i];
+                    maxSumIndex = i;
+                }
+            }
+        }
+
+        var teaser = [];
+        var startIndex = weighted[maxSumIndex][2];
+        for (var i = maxSumIndex; i < maxSumIndex + windowSize; i++) {
+            var word = weighted[i];
+            if (startIndex < word[2]) {
+                // missing text from index to start of `word`
+                teaser.push(body.substring(startIndex, word[2]));
+                startIndex = word[2];
+            }
+
+            // add <strong> around search terms
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("<strong>");
+            }
+            startIndex = word[2] + word[0].length;
+            teaser.push(body.substring(word[2], startIndex));
+
+            if (word[1] === TERM_WEIGHT) {
+                teaser.push("</strong>");
+            }
+        }
+        teaser.push("…");
+        return teaser.join("");
+    }
+
+    function formatSearchResultItem(item, terms) {
+        return '<div class="item">'
+            + `<a href="${item.ref}">${item.doc.title}</a>`
+            + `<span>${makeTeaser(item.doc.body, terms)}</span>`
+            + '</div>';
+    }
+
+    function initSearch() {
+        var $searchInput = document.getElementById("search-bar");
+        var $searchResults = document.getElementById("search-results");
+        var MAX_ITEMS = 10;
+
+        var options = {
+            bool: "AND",
+            fields: {
+                title: { boost: 2 },
+                body: { boost: 1 },
+            }
+        };
+        var currentTerm = "";
+        var index;
+
+        var initIndex = async function () {
+            if (index === undefined) {
+                index = fetch("https://daudix.github.io/distrobox/search_index.en.json")
+                    .then(
+                        async function (response) {
+                            return await elasticlunr.Index.load(await response.json());
+                        }
+                    );
+            }
+            let res = await index;
+            return res;
+        }
+
+        $searchInput.addEventListener("keyup", debounce(async function () {
+            var term = $searchInput.value.trim();
+            if (term === currentTerm) {
+                return;
+            }
+            $searchResults.style.display = term === "" ? "none" : "flex";
+            $searchResults.innerHTML = "";
+            currentTerm = term;
+            if (term === "") {
+                return;
+            }
+
+            var results = (await initIndex()).search(term, options);
+            if (results.length === 0) {
+                $searchResults.style.display = "none";
+                return;
+            }
+
+            for (var i = 0; i < Math.min(results.length, MAX_ITEMS); i++) {
+                $searchResults.innerHTML += formatSearchResultItem(results[i], term.split(" "));
+            }
+        }, 150));
+
+        window.addEventListener('click', function (e) {
+            if ($searchResults.style.display == "flex" && !$searchResults.contains(e.target)) {
+                $searchResults.style.display = "none";
+            }
+        });
+    }
+
+    function toggleSearch() {
+        var searchContainer = document.getElementById("search-container");
+        var searchBar = document.getElementById("search-bar");
+        searchContainer.classList.toggle("active");
+        searchBar.toggleAttribute("disabled");
+    }
+
+    if (document.readyState === "complete" ||
+        (document.readyState !== "loading" && !document.documentElement.doScroll)
+    ) {
+        initSearch();
+    } else {
+        document.addEventListener("DOMContentLoaded", initSearch);
+    }
+</script>
+
+			<script type="text/javascript"  src="https://daudix.github.io/distrobox/elasticlunr.min.js"></script>
+
+	<meta property="og:site_name" content="Distrobox" />
+	<meta property="og:title" content="Home - Distrobox" />
+	<meta property="og:url" content="https://daudix.github.io/distrobox/" />
+	<meta property="og:description" content="Use any linux distribution inside your terminal." />
+	<meta property="og:image" content="https://daudix.github.io/distrobox/card.png" />
+	<meta property="og:locale" content="en_US" />
+</head>
+
+<body>
+
+		<header id="site-nav">
+	<nav>
+		<a href="#main" id="main-content" tabindex="0">
+			Skip to Main Content
+		</a>
+		<ul>
+			<li id="home">
+				<a href="https://daudix.github.io/distrobox"class="active">
+					<i class="icon"></i>Distrobox</a>
+			</li>
+			<div class="divider"></div>
+					<li>
+						<a href="https://daudix.github.io/distrobox/compatibility/">Compatibility</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/featured-articles/">Articles</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/posts/">Posts</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/usage/">Usage</a>
+					</li>
+					<li>
+						<a href="https://daudix.github.io/distrobox/useful-tips/">Tips</a>
+					</li>
+				<li id="search">
+					<button class="circle" onclick="toggleSearch()" title="Search">
+						<i class="icon"></i>
+					</button>
+				</li>
+		</ul>
+	</nav>
+		<div id="search-container">
+			<label for="search-bar" class="hidden">Search</label>
+			<input id="search-bar" placeholder="Search for…" autocomplete="off" type="search" disabled>
+			<div id="search-results-container">
+				<div id="search-results"></div>
+			</div>
+		</div>
+</header>
+
+	<div id="main" class="container">
+		
+		
+<p><img src="https://daudix.github.io/distrobox/assets/splash.svg#no-hover" alt="splash" /></p>
+<h1 id="distrobox">Distrobox<a class="zola-anchor" href="#distrobox" aria-label="Anchor link for: distrobox"><i class="icon"></i></a>
+</h1>
+<small>
+<p>Current logo by <a href="https://daudix.one">daudix</a>.<br />
+Previous logo by <a href="https://github.com/hexared">hexared</a>.
+</small></p>
+<div id="badges">
+<p><a href="https://github.com/89luca89/distrobox/actions/workflows/main.yml"><img src="https://github.com/89luca89/distrobox/actions/workflows/main.yml/badge.svg#transparent#no-hover" alt="Lint" /></a>
+<a href="https://github.com/89luca89/distrobox/actions/workflows/compatibility.yml"><img src="https://github.com/89luca89/distrobox/actions/workflows/compatibility.yml/badge.svg#transparent#no-hover" alt="CI" /></a>
+<a href="https://github.com/89luca89/distrobox/blob/main/COPYING.md"><img src="https://img.shields.io/github/license/89luca89/distrobox?color=blue#transparent#no-hover" alt="GitHub" /></a>
+<a href="https://github.com/89luca89/distrobox/releases/latest"><img src="https://img.shields.io/github/v/release/89luca89/distrobox#transparent#no-hover" alt="GitHub release (latest by date)" /></a>
+<a href="https://repology.org/project/distrobox/versions"><img src="https://repology.org/badge/tiny-repos/distrobox.svg#transparent#no-hover" alt="Packaging status" /></a>
+<a href="https://github.com/89luca89/distrobox/issues?q=is%3Aissue+is%3Aopen+label%3Abug+-label%3Await-on-user"><img src="https://img.shields.io/github/issues-search/89luca89/distrobox?query=is%3Aissue%20is%3Aopen%20label%3Abug%20-label%3Await-on-user%20&amp;label=Open%20Bug%20Reports&amp;color=red#transparent#no-hover" alt="GitHub issues by-label" /></a></p>
+</div>
+<p>Use any Linux distribution inside your terminal. Enable both backward and forward
+compatibility with software and freedom to use whatever distribution you’re more
+comfortable with.
+Distrobox uses <code>podman</code>, <code>docker</code> or
+<a href="https://github.com/89luca89/lilipod"><code>lilipod</code></a> to create containers using the
+Linux distribution of your choice.
+The created container will be tightly integrated with the host, allowing sharing
+of the HOME directory of the user, external storage, external USB devices and
+graphical apps (X11/Wayland), and audio.</p>
+<hr />
+<p><a href="https://matrix.to/#/%23distrobox:matrix.org">Matrix Room</a> -
+<a href="https://t.me/distrobox">Telegram Group</a></p>
+<hr />
+<p><img src="https://user-images.githubusercontent.com/598882/144294862-f6684334-ccf4-4e5e-85f8-1d66210a0fff.png" alt="overview" /></p>
+<hr />
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#what-it-does">What It Does</a>
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#see-it-in-action">See It in Action</a></li>
+</ul>
+</li>
+<li><a href="https://daudix.github.io/distrobox/#why">Why</a>
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#aims">Aims</a>
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#security-implications">Security Implications</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="https://daudix.github.io/distrobox/#quick-start">Quick Start</a></li>
+<li><a href="https://daudix.github.io/distrobox/#assemble-distrobox">Assemble Distrobox</a></li>
+<li><a href="https://daudix.github.io/distrobox/#configure-distrobox">Configure Distrobox</a></li>
+<li><a href="https://daudix.github.io/distrobox/#installation">Installation</a>
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#alternative-methods">Alternative Methods</a>
+<ul>
+<li><a href="https://daudix.github.io/distrobox/#curl-or-wget">Curl or Wget</a></li>
+<li><a href="https://daudix.github.io/distrobox/#upgrading">Upgrading</a></li>
+</ul>
+</li>
+<li><a href="https://daudix.github.io/distrobox/#git">Git</a></li>
+</ul>
+</li>
+<li><a href="https://daudix.github.io/distrobox/#dependencies">Dependencies</a></li>
+<li><a href="https://daudix.github.io/distrobox/#uninstallation">Uninstallation</a></li>
+</ul>
+<h2 id="what-it-does">What It Does<a class="zola-anchor" href="#what-it-does" aria-label="Anchor link for: what-it-does"><i class="icon"></i></a>
+</h2>
+<p>Simply put it’s a fancy wrapper around <code>podman</code>, <code>docker</code>, or <code>lilipod</code> to create and start
+containers highly integrated with the hosts.</p>
+<p>The distrobox environment is based on an OCI image.
+This image is used to create a container that seamlessly integrates with the
+rest of the operating system by providing access to the user’s home directory,
+the Wayland and X11 sockets, networking, removable devices (like USB sticks),
+systemd journal, SSH agent, D-Bus,
+ulimits, /dev and the udev database, etc…</p>
+<p>It implements the same concepts introduced by <a href="https://github.com/containers/toolbox">https://github.com/containers/toolbox</a>
+but in a simplified way using POSIX sh and aiming at broader compatibility.</p>
+<p>All the props go to them as they had the great idea to implement this stuff.</p>
+<p>It is divided into 12 commands:</p>
+<ul>
+<li><code>distrobox-assemble</code> - creates and destroy containers based on a config file</li>
+<li><code>distrobox-create</code> - creates the container</li>
+<li><code>distrobox-enter</code>  - to enter the container</li>
+<li><code>distrobox-ephemeral</code>  - create a temporal container, destroy it when exiting the shell</li>
+<li><code>distrobox-list</code> - to list containers created with distrobox</li>
+<li><code>distrobox-rm</code> - to delete a container created with distrobox</li>
+<li><code>distrobox-stop</code> - to stop a running container created with distrobox</li>
+<li><code>distrobox-upgrade</code> - to upgrade one or more running containers created with distrobox at once</li>
+<li><code>distrobox-generate-entry</code> - to create an entry of a created container in the applications list</li>
+<li><code>distrobox-init</code>   - the entrypoint of the container (not meant to be used manually)</li>
+<li><code>distrobox-export</code> - it is meant to be used inside the container,
+useful to export apps and services from the container to the host</li>
+<li><code>distrobox-host-exec</code> - to run commands/programs from the host, while inside
+of the container</li>
+</ul>
+<p>It also includes a little wrapper to launch commands with <code>distrobox COMMAND</code>
+instead of calling the single files.</p>
+<p>Please check <a href="https://daudix.github.io/distrobox/usage/">the usage docs here</a> and <a href="https://daudix.github.io/distrobox/useful-tips/">see some handy tips on how to use it</a></p>
+<h3 id="see-it-in-action">See It in Action<a class="zola-anchor" href="#see-it-in-action" aria-label="Anchor link for: see-it-in-action"><i class="icon"></i></a>
+</h3>
+<p>Thanks to <a href="https://github.com/castrojo">castrojo</a>, you can see Distrobox in
+action in this explanatory video on his setup with Distrobox, Toolbx,
+Fedora Silverblue for the <a href="https://github.com/ublue-os">uBlue</a> project
+(check it out!)</p>
+<iframe class="youtube-embed"
+	src="https://www.youtube-nocookie.com/embed/Q2PrISAOtbY"
+	title="YouTube video player"
+	allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+	referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<h2 id="why">Why<a class="zola-anchor" href="#why" aria-label="Anchor link for: why"><i class="icon"></i></a>
+</h2>
+<ul>
+<li>Provide a mutable environment on an immutable OS, like <a href="https://daudix.github.io/distrobox/compatibility/#host-distros">ChromeOS, Endless OS,
+Fedora Silverblue, OpenSUSE Aeon/Kalpa, Vanilla OS</a>, or <a href="https://daudix.github.io/distrobox/posts/steamdeck-guide/">SteamOS3</a></li>
+<li>Provide a locally privileged environment for sudoless setups
+(eg. company-provided laptops, security reasons, etc…)</li>
+<li>To mix and match a stable base system (eg. Debian Stable, Ubuntu LTS, RedHat)
+with a bleeding-edge environment for development or gaming
+(eg. Arch, OpenSUSE Tumbleweed, or Fedora with the latest Mesa)</li>
+<li>Leverage a high abundance of curated distro images for <code>docker</code>/<code>podman</code> to
+manage multiple environments.</li>
+</ul>
+<p>Refer to the compatibility list for an overview of the supported host distros
+<a href="https://daudix.github.io/distrobox/compatibility/#host-distros">HERE</a> and container’s distro <a href="https://daudix.github.io/distrobox/compatibility/#containers-distros">HERE</a>.</p>
+<h3 id="aims">Aims<a class="zola-anchor" href="#aims" aria-label="Anchor link for: aims"><i class="icon"></i></a>
+</h3>
+<p>This project aims to bring <strong>any distro userland to any other distro</strong>
+supporting <code>podman</code>, <code>docker</code>, or <code>lilipod</code>.
+It has been written in POSIX shell to be as portable as possible and it does not have
+problems with dependencies and <code>glibc</code> version’s compatibility.</p>
+<p>Refer <a href="https://daudix.github.io/distrobox/compatibility/#supported-container-managers">HERE</a> for a list of
+supported container managers and minimum supported versions.</p>
+<p>It also aims to enter the container <strong>as fast as possible</strong>, every millisecond
+adds up if you use the container as your default environment for your terminal:</p>
+<p>These are some sample results of <code>distrobox-enter</code> on the same container on my
+weak laptop:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell"><span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>$</span></span><span class="z-meta z-function-call z-arguments z-shell"> hyperfine<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>warmup</span> 3<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>runs</span> 100 <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>distrobox enter bench -- whoami<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Benchmark</span></span><span class="z-meta z-function-call z-arguments z-shell"> 1: distrobox enter bench<span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> whoami</span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Time</span></span><span class="z-meta z-function-call z-arguments z-shell"> (mean ± σ</span><span class="z-meta z-function-call z-shell"></span>)<span class="z-meta z-function-call z-shell"><span class="z-support z-function z-colon z-shell">:</span></span><span class="z-meta z-function-call z-arguments z-shell">     395.6 ms ±  10.5 ms    <span class="z-keyword z-control z-regexp z-set z-begin z-shell">[</span>User: 167.4 ms, System: 62.4 ms<span class="z-keyword z-control z-regexp z-set z-end z-shell">]</span></span>
+</span><span class="z-source z-shell z-bash">  <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">Range</span></span><span class="z-meta z-function-call z-arguments z-shell"> (min … max</span><span class="z-meta z-function-call z-shell"></span>)<span class="z-meta z-function-call z-shell"><span class="z-support z-function z-colon z-shell">:</span></span><span class="z-meta z-function-call z-arguments z-shell">   297.3 ms … 408.9 ms    100 runs</span>
+</span></code></pre>
+<h4 id="security-implications">Security Implications<a class="zola-anchor" href="#security-implications" aria-label="Anchor link for: security-implications"><i class="icon"></i></a>
+</h4>
+<p>Isolation and sandboxing are <strong>not</strong> the main aims of the project, on the contrary
+it aims to tightly integrate the container with the host.
+The container will have complete access to your home, pen drive, and so on,
+so do not expect it to be highly sandboxed like a plain
+<code>docker</code>/<code>podman</code> container or a Flatpak.</p>
+<blockquote class="
+	
+	
+	
+	
+	caution
+">
+	<p class="alert-title">
+		<i class="icon"></i>Caution</p>
+	<p>If you use <code>docker</code>, or you use <code>podman</code>/<code>lilipod</code> with the <code>--root/-r</code> flag,
+the containers will run as root, so <strong>root inside the rootful container can modify
+system stuff outside the container</strong>,
+Be also aware that <strong>In rootful mode, you’ll be asked to setup the user’s password</strong>, this will
+ensure at least that the container is not a passwordless gate to root,
+but if you have security concerns for this, <strong>use <code>podman</code> or <code>lilipod</code> that runs in rootless mode</strong>.
+Rootless <code>docker</code> is still not working as intended and will be included in the future
+when it will be complete.</p>
+
+</blockquote>
+<p>That said, it is in the works to implement some sort of decoupling with the host,
+as discussed here: <a href="https://github.com/89luca89/distrobox/issues/28">#28 Sandboxed mode</a></p>
+<h2 id="quick-start">Quick Start<a class="zola-anchor" href="#quick-start" aria-label="Anchor link for: quick-start"><i class="icon"></i></a>
+</h2>
+<p>Create a new distrobox:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>n</span> test</span>
+</span></code></pre>
+<p>Create a new distrobox with Systemd (acts similar to an LXC):</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>name</span> test<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>init</span><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>image</span> debian:latest<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> --</span>additional-packages</span> <span class="z-string z-quoted z-double z-shell"><span class="z-punctuation z-definition z-string z-begin z-shell">&quot;</span>systemd libpam-systemd pipewire-audio-client-libraries<span class="z-punctuation z-definition z-string z-end z-shell">&quot;</span></span></span>
+</span></code></pre>
+<p>Enter created distrobox:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter test</span>
+</span></code></pre>
+<p>Add one with a <a href="https://daudix.github.io/distrobox/compatibility/#host-distros">different distribution</a>,
+eg. Ubuntu 20.04:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> create<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>i</span> ubuntu:20.04</span>
+</span></code></pre>
+<p>Execute a command in a distrobox:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> enter test<span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> command-to-execute</span>
+</span></code></pre>
+<p>List running distroboxes:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> list</span>
+</span></code></pre>
+<p>Stop a running distrobox:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> stop test</span>
+</span></code></pre>
+<p>Remove a distrobox:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">distrobox</span></span><span class="z-meta z-function-call z-arguments z-shell"> rm test</span>
+</span></code></pre>
+<p>You can check <a href="https://daudix.github.io/distrobox/usage/">HERE for more advanced usage</a>
+and check a <a href="https://daudix.github.io/distrobox/useful-tips/">comprehensive list of useful tips HERE</a></p>
+<h2 id="assemble-distrobox">Assemble Distrobox<a class="zola-anchor" href="#assemble-distrobox" aria-label="Anchor link for: assemble-distrobox"><i class="icon"></i></a>
+</h2>
+<p>Manifest files can be used to declare a set of distroboxes and use
+<code>distrobox-assemble</code> to create/destroy them in batch.</p>
+<p>Head over the <a href="https://daudix.github.io/distrobox/usage/distrobox-assemble/">usage docs of distrobox-assemble</a>
+for a more detailed guide.</p>
+<h2 id="configure-distrobox">Configure Distrobox<a class="zola-anchor" href="#configure-distrobox" aria-label="Anchor link for: configure-distrobox"><i class="icon"></i></a>
+</h2>
+<p>Configuration files can be placed in the following paths, from the least important
+to the most important:</p>
+<ul>
+<li>/usr/share/distrobox/distrobox.conf</li>
+<li>/usr/etc/distrobox/distrobox.conf</li>
+<li>/etc/distrobox/distrobox.conf</li>
+<li>${HOME}/.config/distrobox/distrobox.conf</li>
+<li>${HOME}/.distroboxrc</li>
+</ul>
+<p>You can specify inside distrobox configurations and distrobox-specific Environment
+variables.</p>
+<p>Example configuration file:</p>
+<pre data-lang="conf" class="language-conf z-code"><code class="language-conf" data-lang="conf"><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_always_pull</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;1&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_generate_entry</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-constant z-numeric z-genconfig">0</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_manager</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;docker&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_image_default</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;registry.opensuse.org/opensuse/toolbox:latest&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_name_default</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;test-name-1&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_user_custom_home</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;$HOME/.local/share/container-home-test&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_init_hook</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;~/.local/distrobox/a_custom_default_init_hook.sh&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_pre_init_hook</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;~/a_custom_default_pre_init_hook.sh&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_manager_additional_flags</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;--env-file /path/to/file --custom-flag&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">container_additional_volumes</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;/example:/example1 /example2:/example3:ro&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">non_interactive</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;1&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-meta z-param z-genconfig"><span class="z-variable z-parameter z-genconfig">skip_workdir</span><span class="z-keyword z-operator z-genconfig">=</span></span><span class="z-string z-quoted z-double z-genconfig">&quot;0&quot;</span>
+</span><span class="z-source z-genconfig"><span class="z-support z-constant z-genconfig">PATH</span><span class="z-keyword z-operator z-genconfig">=</span><span class="z-string z-quoted z-double z-genconfig">&quot;$PATH:/path/to/custom/podman&quot;</span>
+</span></code></pre>
+<p>Alternatively, it is possible to specify preferences using ENV variables:</p>
+<ul>
+<li>DBX_CONTAINER_ALWAYS_PULL</li>
+<li>DBX_CONTAINER_CUSTOM_HOME</li>
+<li>DBX_CONTAINER_IMAGE</li>
+<li>DBX_CONTAINER_MANAGER</li>
+<li>DBX_CONTAINER_NAME</li>
+<li>DBX_CONTAINER_ENTRY</li>
+<li>DBX_NON_INTERACTIVE</li>
+<li>DBX_SKIP_WORKDIR</li>
+</ul>
+<h2 id="installation">Installation<a class="zola-anchor" href="#installation" aria-label="Anchor link for: installation"><i class="icon"></i></a>
+</h2>
+<p>Distrobox is packaged in the following distributions, if your distribution is
+on this list, you can refer to your repos for installation:</p>
+<p><a href="https://repology.org/project/distrobox/versions"><img src="https://repology.org/badge/vertical-allrepos/distrobox.svg#no-hover" alt="Packaging status" /></a></p>
+<p>Thanks to the maintainers for their work: <a href="https://github.com/M0Rf30">M0Rf30</a>,
+<a href="https://github.com/alcir">alcir</a>, <a href="https://github.com/dfaggioli">dfaggioli</a>,
+<a href="https://github.com/AtilaSaraiva">AtilaSaraiva</a>, <a href="https://github.com/michel-slm">michel-slm</a></p>
+<h3 id="alternative-methods">Alternative Methods<a class="zola-anchor" href="#alternative-methods" aria-label="Anchor link for: alternative-methods"><i class="icon"></i></a>
+</h3>
+<p>Here is a list of alternative ways to install <code>distrobox</code>.</p>
+<h4 id="curl-or-wget">Curl or Wget<a class="zola-anchor" href="#curl-or-wget" aria-label="Anchor link for: curl-or-wget"><i class="icon"></i></a>
+</h4>
+<p>If you like to live your life dangerously, or you want the latest release,
+you can trust me and simply run this in your terminal:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh</span>
+</span></code></pre>
+<p>or using wget</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">wget</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>qO-</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh</span>
+</span></code></pre>
+<p>or if you want to select a custom directory to install without sudo:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --prefix <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local</span>
+</span></code></pre>
+<p>or using wget</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">wget</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>qO-</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --prefix <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local</span>
+</span></code></pre>
+<p>If you want to install the last development version, directly from the last commit on Git, you can use:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --next</span>
+</span></code></pre>
+<p>or using wget</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">wget</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>qO-</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh<span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --next</span>
+</span></code></pre>
+<p>or:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --next --prefix <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local</span>
+</span></code></pre>
+<p>or using wget</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">wget</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>qO-</span> https://raw.githubusercontent.com/89luca89/distrobox/main/install</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --next --prefix <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local</span>
+</span></code></pre>
+<h4 id="upgrading">Upgrading<a class="zola-anchor" href="#upgrading" aria-label="Anchor link for: upgrading"><i class="icon"></i></a>
+</h4>
+<p>Just run the <code>curl</code> or <code>wget</code> command again.</p>
+<blockquote class="
+	
+	
+	
+	warning
+	
+">
+	<p class="alert-title">
+		<i class="icon"></i>Warning</p>
+	<p>Remember to add prefix-path-you-choose/bin to your PATH, to make it work.</p>
+
+</blockquote>
+<h3 id="git">Git<a class="zola-anchor" href="#git" aria-label="Anchor link for: git"><i class="icon"></i></a>
+</h3>
+<p>Alternatively, you can clone the project using <code>git clone</code> or using the latest
+release <a href="https://github.com/89luca89/distrobox/releases/latest">HERE</a>.</p>
+<p>Enter the directory and run <code>./install</code>, by default it will attempt to install
+in <code>~/.local</code> but if you run the script as root, it will default to <code>/usr/local</code>.
+You can specify a custom directory with the <code>--prefix</code> flag
+such as <code>./install --prefix ~/.distrobox</code>.</p>
+<p>Prefix explained: main distrobox files get installed to <code>${prefix}/bin</code> whereas
+the manpages get installed to <code>${prefix}/share/man</code>.</p>
+<hr />
+<p>Check the <a href="https://daudix.github.io/distrobox/compatibility/#host-distros">Host Distros</a> compatibility list for
+distro-specific instructions.</p>
+<h2 id="dependencies">Dependencies<a class="zola-anchor" href="#dependencies" aria-label="Anchor link for: dependencies"><i class="icon"></i></a>
+</h2>
+<p>Distrobox depends on a container manager to work, you can choose to install
+either <code>podman</code>, <code>docker</code> or <a href="https://github.com/89luca89/lilipod"><code>lilipod</code></a>.</p>
+<p>Please look in the <a href="https://daudix.github.io/distrobox/compatibility/#host-distros">Compatibility Table</a> for your
+distribution notes.</p>
+<p>There are ways to install
+<a href="https://daudix.github.io/distrobox/posts/install-podman-static/">Podman without root privileges and in home.</a> or
+<a href="https://daudix.github.io/distrobox/posts/install-lilipod-static/">Lilipod without root privileges and in home.</a>
+This should play well with completely sudoless setups and with devices like the Steam Deck (SteamOS).</p>
+<h2 id="uninstallation">Uninstallation<a class="zola-anchor" href="#uninstallation" aria-label="Anchor link for: uninstallation"><i class="icon"></i></a>
+</h2>
+<p>If you installed <code>distrobox</code> using the <code>install</code> script in the default install
+directory use this:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/uninstall</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sudo</span></span><span class="z-meta z-function-call z-arguments z-shell"> sh</span>
+</span></code></pre>
+<p>or if you specified a custom path:</p>
+<pre data-lang="bash" class="language-bash z-code"><code class="language-bash" data-lang="bash"><span class="z-source z-shell z-bash"><span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">curl</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span> https://raw.githubusercontent.com/89luca89/distrobox/main/uninstall</span> <span class="z-keyword z-operator z-logical z-pipe z-shell">|</span> <span class="z-meta z-function-call z-shell"><span class="z-variable z-function z-shell">sh</span></span><span class="z-meta z-function-call z-arguments z-shell"><span class="z-variable z-parameter z-option z-shell"><span class="z-punctuation z-definition z-parameter z-shell"> -</span>s</span><span class="z-keyword z-operator z-end-of-options z-shell"> --</span></span><span class="z-meta z-function-call z-arguments z-shell"> --prefix <span class="z-meta z-group z-expansion z-tilde"><span class="z-variable z-language z-tilde z-shell">~</span></span>/.local</span>
+</span></code></pre>
+<p>Else if cloned the project using <code>git clone</code> or using the latest archive release
+from <a href="https://github.com/89luca89/distrobox/releases/latest">HERE</a>,</p>
+<p>enter the directory and run <code>./uninstall</code>, by default it will assume the install
+directory was <code>/usr/local</code> if ran as root or <code>~/.local</code>,
+you can specify another directory if needed with <code>./uninstall --prefix ~/.local</code></p>
+<hr />
+<p><img src="https://daudix.github.io/distrobox/assets/distro-box.webp" alt="distro-box" /></p>
+<small>
+<p>This artwork uses:</p>
+<ul>
+<li><a href="https://sketchfab.com/3d-models/a-cardboard-box-d527ec1f29a14513a6e8712a1e980f91">Cardboard Box</a>
+model by <a href="https://sketchfab.com/lloydrostek">J0Y</a>,
+licensed under <a href="http://creativecommons.org/licenses/by/4.0">Creative Commons Attribution 4.0</a>.</li>
+<li><a href="https://github.com/gnome-design-team/gnome-mockups/blob/1ce3f25304e31540a7fc65aa775e854c15404a20/gtk/loop6.blend">GTK Loop Animation</a>
+by the <a href="https://www.gnome.org">GNOME Project</a>,
+licensed under <a href="https://creativecommons.org/licenses/by-sa/3.0">Creative Commons Attribution-ShareAlike 3.0</a>
+as a pre-configured scene.</li>
+<li><a href="https://www.reddit.com/r/linux/comments/nt1tm9/i_made_a_uniform_icon_set_of_linux_distribution">Distribution Icons</a>
+by <a href="https://www.reddit.com/user/walrusz/">u/walrusz</a>.
+</small></li>
+</ul>
+
+
+	</div>
+	<footer id="site-footer">
+			<p>&copy; Distrobox, 2024</p>
+		<p>
+			<a href="https:&#x2F;&#x2F;github.com&#x2F;89luca89&#x2F;distrobox&#x2F;tree&#x2F;main&#x2F;docs" rel="">Website source</a>
+		</p>
+		<p>
+			<small>
+				Powered by <a class="link external" href="https://www.getzola.org" rel="">Zola</a> and <a class="link external" href="https://duckquill.daudix.one" rel="">Duckquill</a>
+			</small>
+		</p>
+</footer>
+
+
+</body>
+</html>
