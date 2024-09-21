@@ -1,5 +1,5 @@
 title = "Distrobox"
-base_url = "https://distrobox.it"
+base_url = "https://daudix.github.io/distrobox"
 description = "Use any linux distribution inside your terminal."
 
 theme = "duckquill"
